@@ -88,7 +88,3 @@ rime-sync/
 - **客户端**: Windows / Android (Termux)，Python 3.9+
 - **同步方式**: HTTP API，tar 批量传输，SHA3-256 哈希校验
 - **设备标识**: 从 Rime 的 `installation.yaml` 读取 `installation_id`
-
-## 许可证
-
-MIT
