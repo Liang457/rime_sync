@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "max_execution_time": 300,
+    "max_memory_mb": 512,
+    "allow_network_access": true,
+    "allowed_hosts": ["*"],
+    "trusted_users": ["Win"],
+    "log_execution": true
+  }
+}

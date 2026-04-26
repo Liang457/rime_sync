@@ -1,0 +1,14 @@
+{
+  "dict": {
+    "cn_dicts_path": "runtime/cn_dicts/",
+    "en_dicts_path": "runtime/en_dicts/",
+    "allowed_extensions": [".dict.yaml", ".txt"],
+    "auto_update_scripts": {
+      "make_ys": {
+        "enabled": false,
+        "schedule": "0 0 * * *",
+        "version": "auto"
+      }
+    }
+  }
+}

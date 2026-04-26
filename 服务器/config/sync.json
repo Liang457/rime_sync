@@ -1,0 +1,12 @@
+{
+  "sync": {
+    "auto_cleanup_days": 30,
+    "max_files_per_device": 100,
+    "max_total_size_mb": 1024,
+    "conflict_resolution": "latest",
+    "hash_algorithm": "sha3-256",
+    "manifest_file": "_manifest.json"
+  },
+  "devices": {
+  }
+}

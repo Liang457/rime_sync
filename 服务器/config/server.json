@@ -1,0 +1,23 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 10032,
+    "debug": false,
+    "log_level": "INFO",
+    "log_file": "logs/server.log",
+    "max_upload_size_mb": 100,
+    "allowed_extensions": [".yaml", ".txt", ".dict.yaml", ".tar"]
+  },
+  "paths": {
+    "rime_ice_original": "rime_ice_original/",
+    "runtime": "runtime/",
+    "makedict": "makedict/",
+    "sync": "sync/",
+    "backups": "backups/"
+  },
+  "git": {
+    "rime_ice_repo": "https://github.com/iDvel/rime-ice.git",
+    "rime_ice_branch": "main",
+    "update_check_interval": 3600
+  }
+}

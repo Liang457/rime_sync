@@ -1,0 +1,32 @@
+{
+  "server": {
+    "url": "http://192.168.8.8:10032",
+    "timeout": 30,
+    "retry_count": 3,
+    "verify_ssl": false
+  },
+  "rime": {
+    "config_dir": "C:\\Users\\23386\\AppData\\Roaming\\Rime",
+    "platform": "windows",
+    "android_trime_config": ""
+  },
+  "sync": {
+    "device_name": "Win",
+    "auto_sync_on_start": false,
+    "exclude_patterns": [
+      "*.userdb.txt.backup",
+      "*.log",
+      "temp/*",
+      "installation.yaml",
+      ".github/*",
+      "build/*",
+      "rime_ice.userdb"
+    ],
+    "conflict_resolution": "latest"
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "rime_client.log",
+    "max_size_mb": 10
+  }
+}

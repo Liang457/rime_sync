@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+venv/
+.venv/
+
+# Logs
+logs/
+*.log
+
+# Rime user data (generated at runtime)
+服务器/rime_ice_original/
+服务器/runtime/
+服务器/sync/
+服务器/backups/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude
+.claude/
+CLAUDE.md
+
+# OS
+Thumbs.db
+.DS_Store

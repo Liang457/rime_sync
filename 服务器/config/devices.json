@@ -1,0 +1,19 @@
+{
+  "devices": {
+    "Win": {
+      "type": "master",
+      "last_seen": "2026-04-14T12:00:00Z",
+      "total_syncs": 15
+    },
+    "n9p": {
+      "type": "slave",
+      "last_seen": "2026-04-14T11:30:00Z",
+      "total_syncs": 8
+    },
+    "pad5pro": {
+      "type": "slave",
+      "last_seen": "2026-04-14T11:00:00Z",
+      "total_syncs": 5
+    }
+  }
+}

@@ -1,0 +1,7 @@
+Flask
+gitpython
+pyzipper
+python-dateutil
+pyyaml
+psutil
+flask-cors

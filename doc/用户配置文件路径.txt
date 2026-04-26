@@ -1,0 +1,496 @@
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----            2026/4/6    17:48                .github
+d----           2026/4/13    21:34                build
+d----           2026/4/12    20:44                cn_dicts
+d----           2026/4/12    13:25                en_dicts
+d----           2026/4/12    13:25                lua
+d----           2026/4/12    13:25                opencc
+d----           2026/4/12    17:04                others
+d----           2026/4/14    14:32                rime_ice.userdb
+d----           2026/4/13    21:32                sync
+-a---            2026/4/6    17:48            278 .gitignore
+-a---           2026/4/14    14:46              0 用户配置文件路径.txt
+-a---            2026/4/6    17:48           1708 custom_phrase.txt
+-a---           2026/4/12    13:24            628 default.custom.yaml
+-a---            2026/4/6    17:48          14842 default.yaml
+-a---            2026/4/6    17:48          15935 double_pinyin_abc.schema.yaml
+-a---            2026/4/6    17:48          16105 double_pinyin_flypy.schema.yaml
+-a---            2026/4/6    17:48          16477 double_pinyin_jiajia.schema.yaml
+-a---            2026/4/6    17:48          16147 double_pinyin_mspy.schema.yaml
+-a---            2026/4/6    17:48          16126 double_pinyin_sogou.schema.yaml
+-a---            2026/4/6    17:48          16513 double_pinyin_ziguang.schema.yaml
+-a---            2026/4/6    17:48          16117 double_pinyin.schema.yaml
+-a---            2026/4/6    17:48             29 go.work
+-a---           2026/4/12    13:23            254 installation.yaml
+-a---            2026/4/6    17:48          35149 LICENSE
+-a---            2026/4/6    17:48            288 melt_eng.dict.yaml
+-a---            2026/4/6    17:48           8330 melt_eng.schema.yaml
+-a---            2026/4/6    17:48        1854142 radical_pinyin.dict.yaml
+-a---            2026/4/6    17:48           8907 radical_pinyin.schema.yaml
+-a---            2026/4/6    17:48          17535 README.md
+-a---           2026/4/12    20:55           1456 rime_ice.dict.yaml
+-a---            2026/4/6    17:48          19325 rime_ice.schema.yaml
+-a---            2026/4/6    17:48          19083 squirrel.yaml
+-a---            2026/4/6    17:48          27337 symbols_caps_v.yaml
+-a---            2026/4/6    17:48          28721 symbols_v.yaml
+-a---            2026/4/6    17:48           3969 t9.schema.yaml
+-a---           2026/4/13    21:34            280 user.yaml
+-a---           2025/6/16    17:16           1363 weasel.custom.yaml
+-a---            2026/4/6    17:48          26333 weasel.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\.github
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----            2026/4/6    17:48                ISSUE_TEMPLATE
+d----            2026/4/6    17:48                workflows
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\.github\ISSUE_TEMPLATE
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48           3898 bug_report.yaml
+-----            2026/4/6    17:48           1198 config.yml
+-----            2026/4/6    17:48           2288 others.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\.github\workflows
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48           4646 release.yml
+-----            2026/4/6    17:48           1146 test.yml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\build
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---           2026/4/12    13:22         138664 bopomofo_tw.prism.bin
+-a---           2026/4/12    13:22           9377 bopomofo_tw.schema.yaml
+-a---           2026/4/12    13:22         359552 bopomofo.prism.bin
+-a---           2026/4/12    13:22           9516 bopomofo.schema.yaml
+-a---           2026/4/12    13:22        2603324 cangjie5.prism.bin
+-a---           2026/4/12    13:22        2893104 cangjie5.reverse.bin
+-a---           2026/4/12    13:22          41772 cangjie5.schema.yaml
+-a---           2026/4/12    13:22        8694652 cangjie5.table.bin
+-a---           2026/4/13    21:34           4156 default.yaml
+-a---           2025/6/16    19:54          47842 double_pinyin_mspy_phone.schema.yaml
+-a---           2026/4/12    13:23          15496 double_pinyin_mspy.prism.bin
+-a---           2026/4/12    13:23          47818 double_pinyin_mspy.schema.yaml
+-a---           2025/6/16    20:00          47742 double_pinyin_phone.schema.yaml
+-a---           2026/4/13    21:30          15208 double_pinyin.prism.bin
+-a---           2026/4/13    21:34          48245 double_pinyin.schema.yaml
+-a---           2026/4/12    13:22          41892 luna_pinyin_fluency.schema.yaml
+-a---           2026/4/12    13:22          31728 luna_pinyin_simp.prism.bin
+-a---           2026/4/12    13:22          42010 luna_pinyin_simp.schema.yaml
+-a---           2026/4/12    13:22          31728 luna_pinyin.prism.bin
+-a---           2026/4/12    13:22         252756 luna_pinyin.reverse.bin
+-a---           2026/4/12    13:22          41867 luna_pinyin.schema.yaml
+-a---           2026/4/12    13:22       13018152 luna_pinyin.table.bin
+-a---           2026/4/12    13:22          16936 luna_quanpin.prism.bin
+-a---           2026/4/12    13:22          41570 luna_quanpin.schema.yaml
+-a---           2026/4/13    21:34        7924840 melt_eng.prism.bin
+-a---           2026/4/12    13:26         237504 melt_eng.reverse.bin
+-a---           2026/4/13    21:34          22865 melt_eng.schema.yaml
+-a---           2026/4/12    13:26         619444 melt_eng.table.bin
+-a---           2026/4/13    21:34        2401776 radical_pinyin.prism.bin
+-a---           2026/4/12    13:26         939652 radical_pinyin.reverse.bin
+-a---           2026/4/13    21:34          11197 radical_pinyin.schema.yaml
+-a---           2026/4/12    13:26        2271148 radical_pinyin.table.bin
+-a---           2026/4/13    21:30          40032 rime_ice.prism.bin
+-a---           2026/4/12    21:07          57252 rime_ice.reverse.bin
+-a---           2026/4/13    21:34          49848 rime_ice.schema.yaml
+-a---           2026/4/12    21:07       60754544 rime_ice.table.bin
+-a---           2026/4/12    13:22        3501372 stroke.prism.bin
+-a---           2026/4/12    13:22        1498516 stroke.reverse.bin
+-a---           2026/4/12    13:22           6567 stroke.schema.yaml
+-a---           2026/4/12    13:22        4548476 stroke.table.bin
+-a---           2026/4/12    13:22         258560 terra_pinyin.prism.bin
+-a---           2026/4/12    13:22         260444 terra_pinyin.reverse.bin
+-a---           2026/4/12    13:22           9102 terra_pinyin.schema.yaml
+-a---           2026/4/12    13:22       10871968 terra_pinyin.table.bin
+-a---           2026/4/12    20:56          19195 weasel.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\cn_dicts
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---            2026/4/6    17:48         387281 41448.dict.yaml
+-a---            2026/4/6    17:48         114111 8105.dict.yaml
+-a---            2026/4/6    17:48       16615831 base.dict.yaml
+-a---            2026/4/6    17:48       11935085 ext.dict.yaml
+-a---            2026/4/6    17:48          16862 others.dict.yaml
+-a---           2026/4/12    20:46           4021 sr.dict.yaml
+-a---            2026/4/6    17:48       17368007 tencent.dict.yaml
+-a---           2025/9/16    12:21            570 tsxt.dict.yaml
+-a---           2026/4/12    21:07          16400 ys.dict.yaml
+-a---           2026/4/12    20:55            611 zzz.dict.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\en_dicts
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---            2026/4/6    17:48          14305 cn_en_abc.txt
+-a---            2026/4/6    17:48          14315 cn_en_double_pinyin.txt
+-a---            2026/4/6    17:48          14304 cn_en_flypy.txt
+-a---            2026/4/6    17:48          14309 cn_en_jiajia.txt
+-a---            2026/4/6    17:48          14303 cn_en_mspy.txt
+-a---            2026/4/6    17:48          14304 cn_en_sogou.txt
+-a---            2026/4/6    17:48          14304 cn_en_ziguang.txt
+-a---            2026/4/6    17:48          16029 cn_en.txt
+-a---            2026/4/6    17:48          49750 en_ext.dict.yaml
+-a---            2026/4/6    17:48         358970 en.dict.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\lua
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----           2026/4/12    13:25                cold_word_drop
+-a---            2026/4/6    17:48           2404 autocap_filter.lua
+-a---            2026/4/6    17:48           6747 calc_translator.lua
+-a---            2026/4/6    17:48            922 cn_en_spacer.lua
+-a---            2026/4/6    17:48           2892 convert_ar_num_to_zh.lua
+-a---            2026/4/6    17:48          19687 corrector.lua
+-a---            2026/4/6    17:48           6077 date_translator.lua
+-a---            2026/4/6    17:48            277 debuger.lua
+-a---            2026/4/6    17:48            669 en_spacer.lua
+-a---            2026/4/6    17:48            250 force_gc.lua
+-a---            2026/4/6    17:48            761 is_in_user_dict.lua
+-a---            2026/4/6    17:48           1817 long_word_filter.lua
+-a---            2026/4/6    17:48          13558 lunar.lua
+-a---            2026/4/6    17:48           7250 number_translator.lua
+-a---            2026/4/6    17:48          13058 pin_cand_filter.lua
+-a---            2026/4/6    17:48           6299 reduce_english_filter.lua
+-a---            2026/4/6    17:48          12301 search.lua
+-a---            2026/4/6    17:48           2374 select_character.lua
+-a---            2026/4/6    17:48            689 t9_preedit.lua
+-a---            2026/4/6    17:48           1484 unicode.lua
+-a---            2026/4/6    17:48            929 uuid.lua
+-a---            2026/4/6    17:48           1344 v_filter.lua
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\lua\cold_word_drop
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---            2026/4/6    17:48             65 drop_words.lua
+-a---            2026/4/6    17:48           2496 filter.lua
+-a---            2026/4/6    17:48            109 hide_words.lua
+-a---            2026/4/6    17:48           1233 logger.lua
+-a---            2026/4/6    17:48           3705 metatable.lua
+-a---            2026/4/6    17:48           4805 processor.lua
+-a---            2026/4/6    17:48            113 reduce_freq_words.lua
+-a---            2026/4/6    17:48            983 string.lua
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\opencc
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---            2026/4/6    17:48            352 emoji.json
+-a---            2025/8/7    20:59         141586 emoji.ocd2
+-a---            2026/4/6    17:48         132411 emoji.txt
+-a---            2025/8/7    20:59          65684 others.ocd2
+-a---            2026/4/6    17:48          45735 others.txt
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----            2026/4/6    17:48                双拼补丁示例
+d----            2026/4/6    17:48                fcitx4
+d----            2026/4/6    17:48                Hamster
+d----            2026/4/6    17:48                iRime
+d----            2026/4/6    17:48                pages
+d----            2026/4/6    17:48                recipes
+d----            2026/4/6    17:48                script
+-a---            2026/4/6    17:48           7546 CHANGELOG.md
+-a---            2026/4/6    17:48           4161 cn_en.txt
+-a---            2026/4/6    17:48         142272 demo.webp
+-a---            2026/4/6    17:48          68994 emoji-map.txt
+-a---            2026/4/6    17:48          15618 sponsor.webp
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\fcitx4
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----            2026/4/6    17:48                legacy_no_lua
+-----            2026/4/6    17:48           4055 install_to_fcitx4.sh
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\fcitx4\legacy_no_lua
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48             44 default.custom.yaml
+-----            2026/4/6    17:48            615 rime_ice.custom.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\Hamster
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48            160 melt_eng.custom.yaml
+-----            2026/4/6    17:48            360 README.md
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\iRime
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----            2026/4/6    17:48                iRime 九宫格
+d----            2026/4/6    17:48                iRime 全键盘
+-----            2026/4/6    17:48            644 README.md
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\iRime\iRime 九宫格
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48            243 melt_eng.custom.yaml
+-----            2026/4/6    17:48            989 rime_ice.custom.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\iRime\iRime 全键盘
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----            2026/4/6    17:48                theme
+-----            2026/4/6    17:48            492 rime_ice.custom.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\iRime\iRime 全键盘\theme
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----            2026/4/6    17:48                iPhone_custom
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\iRime\iRime 全键盘\theme\iPhone_custom
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----            2026/4/6    17:48                port
+-----            2026/4/6    17:48             78 info.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\iRime\iRime 全键盘\theme\iPhone_custom\port
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48          11622 theme.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\pages
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48            246 index.html
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\recipes
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48            207 all_dicts.recipe.yaml
+-----            2026/4/6    17:48            178 cn_dicts.recipe.yaml
+-----            2026/4/6    17:48            691 config.recipe.yaml
+-----            2026/4/6    17:48            151 en_dicts.recipe.yaml
+-----            2026/4/6    17:48            701 full.recipe.yaml
+-----            2026/4/6    17:48            148 opencc.recipe.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\script
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----            2026/4/6    17:48                lint
+d----            2026/4/6    17:48                rime
+d----            2026/4/6    17:48                smoke
+-----            2026/4/6    17:48            147 go.mod
+-----            2026/4/6    17:48            509 go.sum
+-----            2026/4/6    17:48           2022 main.go
+-----            2026/4/6    17:48            388 Makefile
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\script\lint
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48            435 .luacheckrc
+-----            2026/4/6    17:48            378 .yamllint.yml
+-----            2026/4/6    17:48           1214 README.md
+-----            2026/4/6    17:48           4923 run.sh
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\script\rime
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48          59072 错别字.txt
+-----            2026/4/6    17:48           9195 汉字拼音映射.txt
+-----            2026/4/6    17:48          19724 需要注音.txt
+-----            2026/4/6    17:48           8676 check.go
+-----            2026/4/6    17:48          18241 cn_en.go
+-----            2026/4/6    17:48            252 dir_linux.go
+-----            2026/4/6    17:48            285 dir_mac.go
+-----            2026/4/6    17:48            957 dir_windows.go
+-----            2026/4/6    17:48           5110 emoji.go
+-----            2026/4/6    17:48           3036 others.go
+-----            2026/4/6    17:48           8782 pinyin.go
+-----            2026/4/6    17:48           3377 polyphone.go
+-----            2026/4/6    17:48           4131 rime.go
+-----            2026/4/6    17:48           7319 sort.go
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\script\smoke
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----            2026/4/6    17:48                cases
+d----            2026/4/6    17:48                lib
+d----            2026/4/6    17:48                suites
+-----            2026/4/6    17:48           1818 README.md
+-----            2026/4/6    17:48            597 run.sh
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\script\smoke\cases
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----            2026/4/6    17:48                rime_ice
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\script\smoke\cases\rime_ice
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48          13913 input_cases.tsv
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\script\smoke\lib
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48           7641 common.sh
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\script\smoke\suites
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48           7959 config_repo.sh
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\others\双拼补丁示例
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-----            2026/4/6    17:48            226 double_pinyin_flypy.custom.yaml
+-----            2026/4/6    17:48            749 melt_eng.custom.yaml
+-----            2026/4/6    17:48            797 radical_pinyin.custom.yaml
+-----            2026/4/6    17:48            858 README.md
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\rime_ice.userdb
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----           2026/4/12    13:23                lost
+-a---           2026/4/14    12:05        1886190 002659.ldb
+-a---           2026/4/14    12:46          13163 002661.ldb
+-a---           2026/4/14    12:49            380 002664.ldb
+-a---           2026/4/14    14:32            432 002667.ldb
+-a---           2026/4/14    14:32              0 002668.log
+-a---           2026/4/14    14:32             16 CURRENT
+-a---           2025/6/16    17:11              0 LOCK
+-a---           2026/4/14    14:32              0 LOG
+-a---           2026/4/14    12:49            294 LOG.old
+-a---           2026/4/14    14:32            287 MANIFEST-002666
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\rime_ice.userdb\lost
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---           2025/10/4    19:44              0 002546.log
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\sync
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+d----           2026/4/13    21:31                n9p
+d----           2026/4/13    21:34                pad5pro
+d----           2026/4/12    13:46                Win
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\sync\n9p
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---           2026/4/12    13:51           1708 custom_phrase.txt
+-a---           2026/4/12    13:51              0 default.custom.yaml
+-a---           2026/4/12    13:51          14842 default.yaml
+-a---           2026/4/12    13:51          15935 double_pinyin_abc.schema.yaml
+-a---           2026/4/12    13:51          16105 double_pinyin_flypy.schema.yaml
+-a---           2026/4/12    13:51          16477 double_pinyin_jiajia.schema.yaml
+-a---           2026/4/12    13:51          16147 double_pinyin_mspy.schema.yaml
+-a---           2026/4/12    13:51          16126 double_pinyin_sogou.schema.yaml
+-a---           2026/4/12    13:51          16513 double_pinyin_ziguang.schema.yaml
+-a---           2026/4/12    13:51          16117 double_pinyin.schema.yaml
+-a---           2026/4/12    13:51            220 installation.yaml
+-a---           2026/4/13    21:31            112 luna_pinyin.userdb.txt
+-a---           2026/4/12    13:51            288 melt_eng.dict.yaml
+-a---           2026/4/12    13:51           8330 melt_eng.schema.yaml
+-a---           2026/4/12    13:51        1854142 radical_pinyin.dict.yaml
+-a---           2026/4/12    13:51           8907 radical_pinyin.schema.yaml
+-a---           2026/4/12    21:01           1456 rime_ice.dict.yaml
+-a---           2026/4/12    13:51          19325 rime_ice.schema.yaml
+-a---           2026/4/13    21:31        1764392 rime_ice.userdb.txt
+-a---           2026/4/12    13:51          19083 squirrel.yaml
+-a---           2026/4/12    13:51          27337 symbols_caps_v.yaml
+-a---           2026/4/12    13:51          28721 symbols_v.yaml
+-a---           2026/4/12    13:51           3969 t9.schema.yaml
+-a---           2026/4/13    21:31            130 user.yaml
+-a---           2026/4/12    13:51          26333 weasel.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\sync\pad5pro
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---           2026/4/12    13:51           1708 custom_phrase.txt
+-a---           2026/4/12    13:51              0 default.custom.yaml
+-a---           2026/4/12    13:51          14842 default.yaml
+-a---           2026/4/12    13:51          15935 double_pinyin_abc.schema.yaml
+-a---           2026/4/12    13:51          16105 double_pinyin_flypy.schema.yaml
+-a---           2026/4/12    13:51          16477 double_pinyin_jiajia.schema.yaml
+-a---           2026/4/12    13:51          16147 double_pinyin_mspy.schema.yaml
+-a---           2026/4/12    13:51          16126 double_pinyin_sogou.schema.yaml
+-a---           2026/4/12    13:51          16513 double_pinyin_ziguang.schema.yaml
+-a---           2026/4/12    13:51          16117 double_pinyin.schema.yaml
+-a---           2026/4/12    13:51            224 installation.yaml
+-a---           2026/4/13    21:31            148 luna_pinyin.userdb.txt
+-a---           2026/4/12    13:51            288 melt_eng.dict.yaml
+-a---           2026/4/12    13:51           8330 melt_eng.schema.yaml
+-a---           2026/4/12    13:51        1854142 radical_pinyin.dict.yaml
+-a---           2026/4/12    13:51           8907 radical_pinyin.schema.yaml
+-a---           2026/4/12    21:02           1456 rime_ice.dict.yaml
+-a---           2026/4/12    13:51          19325 rime_ice.schema.yaml
+-a---           2026/4/13    21:31        1776868 rime_ice.userdb.txt
+-a---           2026/4/12    13:51          19083 squirrel.yaml
+-a---           2026/4/12    13:51          27337 symbols_caps_v.yaml
+-a---           2026/4/12    13:51          28721 symbols_v.yaml
+-a---           2026/4/12    13:51           3969 t9.schema.yaml
+-a---           2026/4/13    21:31            130 user.yaml
+-a---           2026/4/12    13:51          26333 weasel.yaml
+
+    Directory: C:\Users\23386\AppData\Roaming\Rime\sync\Win
+
+Mode                 LastWriteTime         Length Name
+----                 -------------         ------ ----
+-a---            2025/6/9    16:09           1708 custom_phrase.txt
+-a---           2026/4/12    13:24            628 default.custom.yaml
+-a---            2026/4/6    17:48          14842 default.yaml
+-a---            2026/4/6    17:48          15935 double_pinyin_abc.schema.yaml
+-a---            2026/4/6    17:48          16105 double_pinyin_flypy.schema.yaml
+-a---            2026/4/6    17:48          16477 double_pinyin_jiajia.schema.yaml
+-a---            2026/4/6    17:48          16147 double_pinyin_mspy.schema.yaml
+-a---            2026/4/6    17:48          16126 double_pinyin_sogou.schema.yaml
+-a---            2026/4/6    17:48          16513 double_pinyin_ziguang.schema.yaml
+-a---            2026/4/6    17:48          16117 double_pinyin.schema.yaml
+-a---           2026/4/12    13:23            254 installation.yaml
+-a---           2026/4/12    13:46            118 luna_pinyin.userdb.txt
+-a---            2025/6/9    16:09            288 melt_eng.dict.yaml
+-a---            2026/4/6    17:48           8330 melt_eng.schema.yaml
+-a---            2026/4/6    17:48        1854142 radical_pinyin.dict.yaml
+-a---            2026/4/6    17:48           8907 radical_pinyin.schema.yaml
+-a---           2026/4/12    20:55           1456 rime_ice.dict.yaml
+-a---            2026/4/6    17:48          19325 rime_ice.schema.yaml
+-a---           2026/4/13    21:34        1813313 rime_ice.userdb.txt
+-a---            2026/4/6    17:48          19083 squirrel.yaml
+-a---            2026/4/6    17:48          27337 symbols_caps_v.yaml
+-a---            2026/4/6    17:48          28721 symbols_v.yaml
+-a---            2026/4/6    17:48           3969 t9.schema.yaml
+-a---           2026/4/13    21:30            280 user.yaml
+-a---           2025/6/16    17:16           1363 weasel.custom.yaml
+-a---            2026/4/6    17:48          26333 weasel.yaml
+
