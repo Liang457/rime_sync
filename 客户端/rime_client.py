@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 import tarfile
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
@@ -60,8 +61,10 @@ class RimeClient:
             config.setdefault("sync", {}).setdefault("conflict_resolution", "latest")
             
             config.setdefault("logging", {}).setdefault("level", "INFO")
-            config.setdefault("logging", {}).setdefault("file", "rime_client.log")
+            config.setdefault("logging", {}).setdefault("file", "logs/rime_client.log")
             config.setdefault("logging", {}).setdefault("max_size_mb", 10)
+            config.setdefault("logging", {}).setdefault("archive_enabled", True)
+            config.setdefault("logging", {}).setdefault("archive_retention_days", 90)
             
             # 如果device_name为空，尝试从installation.yaml读取
             if not config["sync"]["device_name"]:
@@ -108,7 +111,13 @@ class RimeClient:
         if "logging" in config:
             new_config["logging"] = config["logging"]
         else:
-            new_config["logging"] = {"level": "INFO", "file": "rime_client.log"}
+            new_config["logging"] = {
+                "level": "INFO",
+                "file": "logs/rime_client.log",
+                "max_size_mb": 10,
+                "archive_enabled": True,
+                "archive_retention_days": 90
+            }
         
         return new_config
     
@@ -142,8 +151,10 @@ class RimeClient:
             },
             "logging": {
                 "level": "INFO",
-                "file": "rime_client.log",
-                "max_size_mb": 10
+                "file": "logs/rime_client.log",
+                "max_size_mb": 10,
+                "archive_enabled": True,
+                "archive_retention_days": 90
             }
         }
         
@@ -183,30 +194,140 @@ class RimeClient:
     
     def setup_logging(self):
         """配置日志"""
+        from logging.handlers import RotatingFileHandler
+
         log_config = self.config.get("logging", {})
         level = getattr(logging, log_config.get("level", "INFO").upper())
-        
-        # 控制台日志
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(level)
-        formatter = logging.Formatter(
+        log_file_str = log_config.get("file", "logs/rime_client.log")
+        max_bytes = log_config.get("max_size_mb", 10) * 1024 * 1024
+        backup_count = 5
+
+        # 相对于配置文件所在目录解析日志路径
+        log_file = (self.config_path.parent / log_file_str).resolve()
+        log_dir = log_file.parent
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        # 归档非当天的旧日志
+        if log_config.get("archive_enabled", True):
+            self._archive_old_logs(log_dir, log_config.get("archive_retention_days", 90))
+
+        # 清除已有 handler，重建
+        root = logging.getLogger()
+        for h in root.handlers[:]:
+            root.removeHandler(h)
+
+        root.setLevel(level)
+        fmt = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
-        console_handler.setFormatter(formatter)
-        
-        # 文件日志
-        file_handler = None
-        log_file = log_config.get("file")
-        if log_file:
-            file_handler = logging.FileHandler(log_file, encoding="utf-8")
-            file_handler.setLevel(level)
-            file_handler.setFormatter(formatter)
-        
-        # 配置根日志记录器
-        logging.basicConfig(level=level, handlers=[console_handler])
-        if file_handler:
-            logging.getLogger().addHandler(file_handler)
-    
+
+        ch = logging.StreamHandler()
+        ch.setFormatter(fmt)
+        root.addHandler(ch)
+
+        fh = RotatingFileHandler(
+            str(log_file), maxBytes=max_bytes,
+            backupCount=backup_count, encoding="utf-8"
+        )
+        fh.setFormatter(fmt)
+        root.addHandler(fh)
+
+    def _archive_old_logs(self, log_dir, retention_days):
+        """扫描 log_dir 下 mtime 非当天的文件，打包归档。压缩回退链：7z → tar.gz → tar"""
+        today = date.today()
+        old_files = [
+            f for f in log_dir.iterdir()
+            if f.is_file()
+            and not f.name.startswith(".")
+            and datetime.fromtimestamp(f.stat().st_mtime).date() != today
+        ]
+        if not old_files:
+            return
+
+        archive_dir = log_dir / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        archive_path = self._try_compress(old_files, archive_dir, ts)
+
+        if archive_path and archive_path.stat().st_size > 0:
+            logging.getLogger(__name__).info(
+                f"日志归档完成: {archive_path.name} ({archive_path.stat().st_size / 1024:.1f} KB)"
+            )
+            for f in old_files:
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+
+        self._cleanup_old_archives(archive_dir, retention_days)
+
+    def _try_compress(self, file_list, archive_dir, timestamp):
+        """三步回退：7z 命令行 → tar.gz → 无压缩 tar"""
+        import shutil
+        import subprocess
+
+        temp_dir = Path(tempfile.gettempdir())
+        tar_path = temp_dir / f"rime_client_logs_{timestamp}.tar"
+
+        try:
+            with tarfile.open(tar_path, "w") as tar:
+                for f in file_list:
+                    tar.add(str(f), arcname=f.name)
+        except Exception:
+            if tar_path.exists():
+                tar_path.unlink(missing_ok=True)
+            return None
+
+        # 1) 尝试 7z 命令行
+        archive_path = archive_dir / f"logs_{timestamp}.tar.7z"
+        try:
+            result = subprocess.run(
+                ["7z", "a", str(archive_path), str(tar_path)],
+                capture_output=True, text=True, timeout=300
+            )
+            if result.returncode == 0:
+                tar_path.unlink(missing_ok=True)
+                return archive_path
+        except Exception:
+            pass
+        if archive_path.exists():
+            archive_path.unlink(missing_ok=True)
+
+        # 2) 回退到 tar.gz
+        archive_path = archive_dir / f"logs_{timestamp}.tar.gz"
+        try:
+            import gzip
+            with open(tar_path, "rb") as src, gzip.open(archive_path, "wb") as dst:
+                shutil.copyfileobj(src, dst, length=1024 * 1024)
+            tar_path.unlink(missing_ok=True)
+            return archive_path
+        except Exception:
+            if archive_path.exists():
+                archive_path.unlink(missing_ok=True)
+
+        # 3) 最终回退：无压缩 tar
+        final_path = archive_dir / f"logs_{timestamp}.tar"
+        shutil.move(str(tar_path), str(final_path))
+        return final_path
+
+    @staticmethod
+    def _cleanup_old_archives(archive_dir, retention_days):
+        """删除 mtime 超过保留期的归档文件"""
+        if not archive_dir.exists():
+            return
+        cutoff = datetime.now() - timedelta(days=retention_days)
+        for f in archive_dir.iterdir():
+            if not f.is_file():
+                continue
+            mtime = datetime.fromtimestamp(f.stat().st_mtime)
+            if mtime < cutoff:
+                try:
+                    f.unlink()
+                    logging.getLogger(__name__).info(f"已删除过期归档: {f.name}")
+                except OSError:
+                    pass
+
     def get_device_name(self) -> str:
         """获取当前设备名（优先使用配置文件中的，否则从installation.yaml读取）"""
         device_name = self.config["sync"]["device_name"]

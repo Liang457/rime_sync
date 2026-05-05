@@ -15,11 +15,11 @@ from datetime import datetime
 from pathlib import Path
 
 # 在 import utils 之前配置基础日志，确保 Manager 单例初始化期间的
-# warning/error 至少输出到 stdout，不会被静默吞掉
+# warning/error 至少输出到 stderr，不会被静默吞掉
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[logging.StreamHandler(sys.stderr)]
 )
 
 from flask import Flask, request, jsonify, send_file
@@ -44,6 +44,7 @@ from utils.error_handler import (
 
 def setup_logging():
     from logging.handlers import RotatingFileHandler
+    from utils.log_manager import LogManager
 
     log_level = config_manager.get("server", "server.log_level", "INFO")
     log_file = config_manager.get("server", "server.log_file", "logs/server.log")
@@ -51,22 +52,38 @@ def setup_logging():
     log_backup_count = config_manager.get("server", "server.log_backup_count", 5)
 
     log_dir = Path(log_file).parent
-    if not log_dir.exists():
-        log_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
 
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            RotatingFileHandler(
-                log_file,
-                maxBytes=log_max_bytes,
-                backupCount=log_backup_count,
-                encoding='utf-8'
-            ),
-            logging.StreamHandler(sys.stdout)
-        ]
+    # 归档非当天的旧日志（在创建新 handler 之前）
+    archive_enabled = config_manager.get("log_archive", "log_archive.enabled", True)
+    retention_days = config_manager.get("log_archive", "log_archive.retention_days", 90)
+    if archive_enabled:
+        lm = LogManager(log_dir, retention_days)
+        lm.archive_old_logs()
+        lm.cleanup_old_archives()
+
+    # 清除模块级 bootstrap handler，修复 basicConfig 二次调用无效的 bug
+    root = logging.getLogger()
+    for h in root.handlers[:]:
+        root.removeHandler(h)
+
+    root.setLevel(getattr(logging, log_level.upper()))
+    fmt = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
+
+    fh = RotatingFileHandler(
+        str(Path(log_file).resolve()),
+        maxBytes=log_max_bytes,
+        backupCount=log_backup_count,
+        encoding='utf-8'
+    )
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+
+    sh = logging.StreamHandler(sys.stdout)
+    sh.setFormatter(fmt)
+    root.addHandler(sh)
 
     logger = logging.getLogger(__name__)
     logger.info(f"日志系统初始化完成，日志级别: {log_level}")

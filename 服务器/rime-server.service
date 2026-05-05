@@ -4,13 +4,12 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/rime_sync/服务器
-ExecStart=/usr/bin/python3 server.py
+WorkingDirectory=/home/gk-pi/rime_server
+ExecStart=/home/gk-pi/rime_server/start_server.sh
 Restart=always
 RestartSec=10
-StandardOutput=append:/home/pi/rime_sync/服务器/logs/stdout.log
-StandardError=append:/home/pi/rime_sync/服务器/logs/stderr.log
+StandardOutput=append:/home/gk-pi/rime_server/logs/stdout.log
+StandardError=append:/home/gk-pi/rime_server/logs/stderr.log
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

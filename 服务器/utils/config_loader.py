@@ -32,6 +32,8 @@ class ConfigManager:
                     "debug": False,
                     "log_level": "INFO",
                     "log_file": "logs/server.log",
+                    "log_max_bytes": 10485760,
+                    "log_backup_count": 5,
                     "max_upload_size_mb": 100,
                     "allowed_extensions": [".yaml", ".txt", ".dict.yaml", ".tar"]
                 },
@@ -46,6 +48,10 @@ class ConfigManager:
                     "rime_ice_repo": "https://github.com/MarkLux/rime-ice.git",
                     "rime_ice_branch": "main",
                     "update_check_interval": 3600
+                },
+                "log_archive": {
+                    "enabled": True,
+                    "retention_days": 90
                 }
             },
             "sync.json": {
