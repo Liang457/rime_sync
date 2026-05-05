@@ -217,6 +217,6 @@ class DictManager:
             return f"sha3-256:{hash_obj.hexdigest()}"
         except Exception as e:
             logger.error(f"计算文件哈希失败: {filepath}, 错误: {e}")
-            return f"error:{str(e)[:50]}"
+            raise APIError(f"计算文件哈希失败: {str(e)}", 500)
 
 dict_manager = DictManager()

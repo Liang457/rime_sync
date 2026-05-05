@@ -5,7 +5,7 @@ Rime 输入法多设备配置同步系统。服务端管理 [rime-ice](https://g
 ## 架构
 
 ```
-客户端 (Python CLI) ──HTTP API──▶ 服务器 (Flask)
+客户端 (Python CLI) ──HTTP API──▶ 服务器 (Flask + Waitress)
                                   ├── 配置管理 (*.custom.yaml)
                                   ├── 词库同步 (cn_dicts/, en_dicts/)
                                   ├── 用户输入词库同步 (sync/)
@@ -29,8 +29,23 @@ Rime 输入法多设备配置同步系统。服务端管理 [rime-ice](https://g
 ```bash
 cd 服务器
 pip install -r requirements.txt
-# 编辑 config/server.json，配置主机和端口
+# 编辑 config/server.json，配置主机、端口和线程数
 python server.py
+```
+
+生产环境建议使用 systemd 守护运行，并配置日志轮转：
+
+```bash
+# 1. 复制服务文件（根据实际路径修改）
+sudo cp 服务器/rime-server.service /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# 2. 启用并启动服务
+sudo systemctl enable rime-server
+sudo systemctl start rime-server
+
+# 3. 查看状态
+sudo systemctl status rime-server
 ```
 
 ### 客户端
@@ -58,16 +73,17 @@ python rime_client.py health                        # 健康检查
 
 ```
 rime-sync/
-├── 服务器/                    # Flask 服务端
+├── 服务器/                    # 服务端 (Flask + Waitress)
 │   ├── server.py             # 主程序
+│   ├── rime-server.service   # systemd 服务文件
 │   ├── config/               # JSON 配置文件
 │   ├── utils/                # 工具模块
-│   │   ├── config_loader.py  # 配置加载与热重载
+│   │   ├── config_loader.py  # 配置加载与热重载（失败自动回滚）
 │   │   ├── sync_manager.py   # 用户输入词库同步
 │   │   ├── full_sync_manager.py  # 完整配置包同步
 │   │   ├── dict_manager.py   # 词库管理
-│   │   ├── rime_ice_manager.py   # rime-ice git 管理
-│   │   ├── script_runner.py  # 自定义词库脚本执行
+│   │   ├── rime_ice_manager.py   # rime-ice git 管理（带超时保护）
+│   │   ├── script_runner.py  # 自定义词库脚本执行（进程组管理）
 │   │   ├── config_uploader.py    # 配置文件上传
 │   │   ├── file_editor.py    # 行级文件编辑
 │   │   └── error_handler.py  # 统一错误处理
@@ -84,7 +100,21 @@ rime-sync/
 
 ## 部署环境
 
-- **服务端**: 树莓派 5，Python 3.9+，Flask
+- **服务端**: 树莓派 5 / Linux 服务器，Python 3.9+
+  - WSGI: Waitress（生产级多线程）
+  - 进程守护: systemd（自动重启、崩溃恢复）
+  - 日志: RotatingFileHandler（自动轮转，默认 10MB × 5 份）
 - **客户端**: Windows / Android (Termux)，Python 3.9+
 - **同步方式**: HTTP API，tar 批量传输，SHA3-256 哈希校验
 - **设备标识**: 从 Rime 的 `installation.yaml` 读取 `installation_id`
+
+## 最近更新
+
+- 使用 **Waitress** 替代 Flask 开发服务器，提升生产环境稳定性
+- 修复 `send_file` 流式传输与临时文件删除的竞态条件
+- 日志系统升级为 **RotatingFileHandler**，防止磁盘占满
+- Git 操作（clone/fetch/pull）添加 **120 秒超时保护**
+- `copy_to_runtime` 增加**备份-复制-恢复**机制，防止更新失败导致服务中断
+- 脚本执行超时采用**进程组清理**，避免孤儿/僵尸子进程
+- 配置热重载失败时**自动回滚**到旧配置
+- 新增 **systemd 服务文件**，支持开机自启与崩溃自动重启

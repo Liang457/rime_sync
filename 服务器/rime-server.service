@@ -1,0 +1,16 @@
+[Unit]
+Description=Rime Config Sync Server
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/rime_sync/服务器
+ExecStart=/usr/bin/python3 server.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/pi/rime_sync/服务器/logs/stdout.log
+StandardError=append:/home/pi/rime_sync/服务器/logs/stderr.log
+
+[Install]
+WantedBy=multi-user.target

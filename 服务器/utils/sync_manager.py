@@ -186,15 +186,13 @@ class SyncManager:
                         # 首先尝试使用shutil.move（如果同设备会更快）
                         shutil.move(str(extracted_file), str(target_path))
                     except OSError as e:
-                        # 如果是因为跨设备错误，使用复制+删除
-                        if e.errno == errno.EXDEV:  # Invalid cross-device link
+                        # 跨设备 move 失败时，退化为 copy + delete
+                        # errno.EXDEV 是 Linux 跨设备错误, winerror 17 是 Windows 等价
+                        if e.errno == errno.EXDEV or getattr(e, 'winerror', None) == 17:
                             logger.debug(f"跨设备移动，使用复制+删除: {extracted_file} -> {target_path}")
-                            # 复制文件，保留元数据
                             shutil.copy2(str(extracted_file), str(target_path))
-                            # 删除源文件
                             extracted_file.unlink()
                         else:
-                            # 其他错误，重新抛出
                             raise
 
                     # 更新清单
@@ -336,14 +334,15 @@ class SyncManager:
         return file_path
     
     def create_tar(self, device_name: str, since: str = None) -> Path:
-        """创建设备的tar文件"""
+        """创建设备的tar文件（写入TAR_CACHE目录）"""
+        import uuid
         import tempfile
 
         device_path = self.get_device_path(device_name)
         if not device_path.exists():
             raise APIError(f"设备不存在: {device_name}", 404)
 
-        # 创建临时tar文件
+        # 创建临时tar文件（写入系统临时目录，后续由路由层移到TAR_CACHE）
         temp_tar = tempfile.NamedTemporaryFile(suffix='.tar', delete=False)
         temp_tar.close()
 

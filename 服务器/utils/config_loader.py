@@ -137,9 +137,15 @@ class ConfigManager:
             return False
 
     def reload(self):
+        """重新加载所有配置文件（失败时自动回滚）"""
         self.logger.info("重新加载所有配置文件")
-        old_configs = self.configs.copy()
-        self.load_all_configs()
+        old_configs = {k: v.copy() for k, v in self.configs.items()}
+        try:
+            self.load_all_configs()
+        except Exception as e:
+            self.logger.error(f"配置重载失败，回滚到旧配置: {e}")
+            self.configs = old_configs
+            return False
         return self.configs != old_configs
 
 config_manager = ConfigManager()

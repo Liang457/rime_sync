@@ -7,11 +7,34 @@ rime-server 主程序
 import os
 import sys
 import logging
+import shutil
+import atexit
+import uuid
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
+# 在 import utils 之前配置基础日志，确保 Manager 单例初始化期间的
+# warning/error 至少输出到 stdout，不会被静默吞掉
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+
+# 临时 tar 文件缓存目录，避免 send_file 流式传输时的竞态删除问题
+TAR_CACHE = Path(tempfile.gettempdir()) / "rime_server_tar_cache"
+TAR_CACHE.mkdir(parents=True, exist_ok=True)
+
+def _cleanup_tar_cache():
+    """进程退出时清理缓存目录"""
+    if TAR_CACHE.exists():
+        shutil.rmtree(TAR_CACHE, ignore_errors=True)
+
+atexit.register(_cleanup_tar_cache)
 
 from utils.config_loader import config_manager
 from utils.error_handler import (
@@ -20,22 +43,31 @@ from utils.error_handler import (
 )
 
 def setup_logging():
+    from logging.handlers import RotatingFileHandler
+
     log_level = config_manager.get("server", "server.log_level", "INFO")
     log_file = config_manager.get("server", "server.log_file", "logs/server.log")
-    
+    log_max_bytes = config_manager.get("server", "server.log_max_bytes", 10 * 1024 * 1024)
+    log_backup_count = config_manager.get("server", "server.log_backup_count", 5)
+
     log_dir = Path(log_file).parent
     if not log_dir.exists():
         log_dir.mkdir(parents=True, exist_ok=True)
-    
+
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(log_file, encoding='utf-8'),
+            RotatingFileHandler(
+                log_file,
+                maxBytes=log_max_bytes,
+                backupCount=log_backup_count,
+                encoding='utf-8'
+            ),
             logging.StreamHandler(sys.stdout)
         ]
     )
-    
+
     logger = logging.getLogger(__name__)
     logger.info(f"日志系统初始化完成，日志级别: {log_level}")
     return logger
@@ -271,20 +303,32 @@ def create_app():
 
         try:
             tar_path = sync_manager.create_tar(device, since)
-            return send_file(
-                str(tar_path),
+            cache_name = f"sync_{device}_{uuid.uuid4().hex[:8]}.tar"
+            cache_path = TAR_CACHE / cache_name
+            shutil.move(str(tar_path), str(cache_path))
+            tar_path = cache_path
+
+            response = send_file(
+                str(cache_path),
                 as_attachment=True,
                 download_name=f"{device}_sync.tar",
                 mimetype='application/x-tar'
             )
+            @response.call_on_close
+            def cleanup():
+                try:
+                    if cache_path.exists():
+                        cache_path.unlink()
+                except Exception:
+                    pass
+            return response
         except APIError as e:
-            return error_response(e.message, e.code, e.details)
-        finally:
             if tar_path is not None and tar_path.exists():
                 try:
                     tar_path.unlink()
                 except Exception:
                     pass
+            return error_response(e.message, e.code, e.details)
     
     @app.route('/api/sync/get/<device>/file/<path:filename>', methods=['GET'])
     def sync_get_file(device, filename):
@@ -335,20 +379,32 @@ def create_app():
 
         try:
             tar_path = dict_manager.create_tar(category, since)
-            return send_file(
-                str(tar_path),
+            cache_name = f"dict_{category or 'all'}_{uuid.uuid4().hex[:8]}.tar"
+            cache_path = TAR_CACHE / cache_name
+            shutil.move(str(tar_path), str(cache_path))
+            tar_path = cache_path
+
+            response = send_file(
+                str(cache_path),
                 as_attachment=True,
                 download_name=f"rime_dicts_{category or 'all'}.tar",
                 mimetype='application/x-tar'
             )
+            @response.call_on_close
+            def cleanup():
+                try:
+                    if cache_path.exists():
+                        cache_path.unlink()
+                except Exception:
+                    pass
+            return response
         except APIError as e:
-            return error_response(e.message, e.code, e.details)
-        finally:
             if tar_path is not None and tar_path.exists():
                 try:
                     tar_path.unlink()
                 except Exception:
                     pass
+            return error_response(e.message, e.code, e.details)
     
     @app.route('/api/dict/get/file/<path:file_name>', methods=['GET'])
     def dict_get_file(file_name):
@@ -397,20 +453,32 @@ def create_app():
                 exclude_patterns=full_sync_manager.get_exclude_patterns(exclude) if exclude else None,
                 since=since
             )
-            return send_file(
-                str(tar_path),
+            cache_name = f"fullsync_{uuid.uuid4().hex[:8]}.tar"
+            cache_path = TAR_CACHE / cache_name
+            shutil.move(str(tar_path), str(cache_path))
+            tar_path = cache_path
+
+            response = send_file(
+                str(cache_path),
                 as_attachment=True,
                 download_name="rime_full_config.tar",
                 mimetype='application/x-tar'
             )
+            @response.call_on_close
+            def cleanup():
+                try:
+                    if cache_path.exists():
+                        cache_path.unlink()
+                except Exception:
+                    pass
+            return response
         except APIError as e:
-            return error_response(e.message, e.code, e.details)
-        finally:
             if tar_path is not None and tar_path.exists():
                 try:
                     tar_path.unlink()
                 except Exception:
                     pass
+            return error_response(e.message, e.code, e.details)
     
     @app.route('/api/full_sync/upload', methods=['POST'])
     def full_sync_upload():
@@ -445,15 +513,16 @@ def create_app():
 
 if __name__ == '__main__':
     app, logger = create_app()
-    
+
     host = config_manager.get("server", "server.host", "0.0.0.0")
     port = config_manager.get("server", "server.port", 10032)
-    debug = config_manager.get("server", "server.debug", False)
-    
-    logger.info(f"启动服务器: {host}:{port} (调试模式: {debug})")
-    
+    threads = config_manager.get("server", "server.threads", 4)
+
+    logger.info(f"启动服务器 (waitress): {host}:{port}, threads={threads}")
+
     try:
-        app.run(host=host, port=port, debug=debug)
+        from waitress import serve
+        serve(app, host=host, port=port, threads=threads)
     except Exception as e:
         logger.error(f"服务器启动失败: {e}")
         sys.exit(1)

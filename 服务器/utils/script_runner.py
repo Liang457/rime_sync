@@ -98,13 +98,19 @@ class ScriptRunner:
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
-                    encoding='utf-8'
+                    encoding='utf-8',
+                    start_new_session=True,  # 创建新进程组，方便超时时清理子树
                 )
-                
+
                 try:
                     stdout, stderr = process.communicate(timeout=self.max_execution_time)
                 except subprocess.TimeoutExpired:
-                    process.kill()
+                    # 杀整个进程组，避免孤儿/僵尸子进程
+                    try:
+                        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                        process.wait(timeout=5)
+                    except Exception:
+                        process.kill()
                     stdout, stderr = process.communicate()
                     logger.error(f"脚本执行超时: {script_name}, 超时时间: {self.max_execution_time}秒")
                     raise APIError(f"脚本执行超时（超过{self.max_execution_time}秒）", 408)
@@ -132,15 +138,12 @@ class ScriptRunner:
                         # 尝试使用shutil.move（如果同设备会更快）
                         shutil.move(str(dict_file), str(target_file))
                     except OSError as e:
-                        # 如果是因为跨设备错误，使用复制+删除
-                        if e.errno == errno.EXDEV:  # Invalid cross-device link
+                        # 跨设备 move 失败时，退化为 copy + delete
+                        if e.errno == errno.EXDEV or getattr(e, 'winerror', None) == 17:
                             logger.debug(f"跨设备移动，使用复制+删除: {dict_file} -> {target_file}")
-                            # 复制文件，保留元数据
                             shutil.copy2(str(dict_file), str(target_file))
-                            # 删除源文件
                             dict_file.unlink()
                         else:
-                            # 其他错误，重新抛出
                             raise
                     
                     moved_files.append(dict_file.name)

@@ -5,3 +5,4 @@ python-dateutil
 pyyaml
 psutil
 flask-cors
+waitress
