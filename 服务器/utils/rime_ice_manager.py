@@ -102,10 +102,19 @@ def update_rime_ice_repo(force=False):
                 logger.error(f"git pull 失败: {stderr}")
                 raise APIError(f"更新失败: {stderr[:200]}", 500)
             new_commit = _get_head_commit(repo_path)
+
+            changed_files = []
+            returncode, diff_output, _ = _run_git(
+                ["diff", "--name-only", f"{local_commit}..{new_commit}"],
+                cwd=str(repo_path)
+            )
+            if diff_output:
+                changed_files = [f.strip() for f in diff_output.split('\n') if f.strip()]
+
             return {
                 "previous_commit": local_commit,
                 "current_commit": new_commit,
-                "changed_files": [],
+                "changed_files": changed_files,
                 "upgraded": True,
                 "message": f"强制更新完成: {local_commit[:8]} -> {new_commit[:8]}"
             }

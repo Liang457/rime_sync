@@ -716,8 +716,13 @@ class RimeClient:
         
         if result.get("success"):
             data = result.get("data", {})
-            logging.info(f"脚本执行成功: {data.get('output_file', '未知文件')}")
-            logging.info(f"生成大小: {data.get('size', 0)} 字节")
+            output_files = data.get('output_files', [])
+            total_size = data.get('total_size', 0)
+            if output_files:
+                logging.info(f"脚本执行成功: {', '.join(output_files)}")
+            else:
+                logging.info("脚本执行成功: 未知文件")
+            logging.info(f"生成大小: {total_size} 字节")
             return data
         else:
             logging.error("运行脚本失败")

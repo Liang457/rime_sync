@@ -131,9 +131,13 @@ class ScriptRunner:
                 
                 # 将生成的词库文件移动到runtime/cn_dicts/
                 moved_files = []
+                total_size = 0
                 for dict_file in dict_files:
                     target_file = self.runtime_cn_dicts / dict_file.name
-                    
+
+                    file_size = dict_file.stat().st_size
+                    total_size += file_size
+
                     try:
                         # 尝试使用shutil.move（如果同设备会更快）
                         shutil.move(str(dict_file), str(target_file))
@@ -145,24 +149,26 @@ class ScriptRunner:
                             dict_file.unlink()
                         else:
                             raise
-                    
-                    moved_files.append(dict_file.name)
-                    
+
+                    moved_files.append({"name": dict_file.name, "size": file_size})
+
                     logger.info(f"词库文件已移动: {dict_file.name} -> {target_file}")
-                
+
                 # 记录执行日志
                 if self.log_execution:
                     logger.info(f"脚本执行成功: {script_name}, 版本: {version}, "
                                f"耗时: {execution_time:.2f}秒, "
-                               f"生成文件: {', '.join(moved_files)}")
-                
+                               f"生成文件: {', '.join(f['name'] for f in moved_files)}")
+
                 return {
                     "success": True,
                     "script": script_name,
                     "version": version,
                     "execution_time": round(execution_time, 2),
-                    "output_files": moved_files,
-                    "stdout": stdout[:1000],  # 限制输出长度
+                    "output_files": [f["name"] for f in moved_files],
+                    "output_files_detail": moved_files,
+                    "total_size": total_size,
+                    "stdout": stdout[:1000],
                     "stderr": stderr[:500] if stderr else None,
                     "exit_code": process.returncode
                 }
