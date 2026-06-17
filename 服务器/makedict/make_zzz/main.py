@@ -4,8 +4,13 @@ import os
 import re
 import time
 
-from zzz_crawler import fetch_role_names
-from zzz_weapon_crawler import fetch_weapon_names
+from zzz_api_crawler import (
+    fetch_agent_names,
+    fetch_weapon_names,
+    fetch_bangboo_names,
+    fetch_drive_disk_names,
+    fetch_material_names,
+)
 
 
 def setup_logging():
@@ -63,19 +68,54 @@ def read_other_words(filepath="other.txt"):
     return words
 
 
+def process_agent_names(names):
+    """
+    代理人名字特殊处理：
+    对含 · / • / 半角空格 的名字，拆分为多个词条：
+    1. 去分隔符的合并形式（如 维琳娜艾嘉德）
+    2. 每个分隔部分（如 维琳娜、艾嘉德）
+
+    示例：
+      维琳娜·艾嘉德 → 维琳娜艾嘉德, 维琳娜, 艾嘉德
+      浮波 柚叶     → 浮波柚叶, 浮波, 柚叶
+      星徽·比利·奇德 → 星徽比利奇德, 星徽, 比利, 奇德
+    """
+    results = []
+    for name in names:
+        # 判断使用哪种分隔符
+        if "·" in name:
+            sep = "·"
+        elif "•" in name:
+            sep = "•"
+        elif " " in name:
+            sep = " "
+        else:
+            results.append(name)
+            continue
+
+        parts = [p.strip() for p in name.split(sep) if p.strip()]
+        # 合并形式
+        joined = name.replace(sep, "").replace(" ", "")
+        results.append(joined)
+        for p in parts:
+            results.append(p)
+
+    return results
+
+
 def preprocess_word(word):
     """
     对单个词进行通用预处理。
     返回：预处理后的词列表（可能因拆分返回多个词）
 
     处理规则：
-    1. & 视为拆分，如 莱卡恩&冯·莱卡恩 → 莱卡恩, 冯·莱卡恩
+    1. & 视为拆分
     2. 去除（...）及括号本身
     3. 去除「」引号本身，保留内部内容
     4. ，（中文逗号）视为拆分
     5. ！、：、《》 去除标点本身
     6. 英文部分去除（仅当词中含中文时）
-    7. · / • 只去除点本身
+    7. · / • 去除点本身（代理人名已在 process_agent_names 处理）
     """
     results = [word]
 
@@ -111,7 +151,7 @@ def preprocess_word(word):
 
     # 6. 英文部分去除
     #    若词中含中文，则去除连续的英文字母片段（如 耀嘉音LV → 耀嘉音）
-    #    纯英文词（如 Saber）保留。不删除数字（如 11号 应保留）
+    #    纯英文词保留。不删除数字（如 11号 应保留）
     new_results = []
     for w in results:
         if re.search(r"[一-鿿]", w):
@@ -123,8 +163,8 @@ def preprocess_word(word):
                 new_results.append(w)
     results = new_results
 
-    # 7. 去除 · / •（只去掉点本身）
-    results = [w.replace("·", "").replace("•", "").strip() for w in results]
+    # 7. 去除 · / • / 空格（只去掉分隔符本身）
+    results = [w.replace("·", "").replace("•", "").replace(" ", "").strip() for w in results]
     results = [r for r in results if r]
 
     return results
@@ -165,31 +205,43 @@ def main():
     version = get_version()
     logging.info(f"词库版本: {version}")
 
-    # 1. 获取原始数据
-    roles = fetch_role_names()
-    logging.info(f"共获取到 {len(roles)} 个角色")
+    # 1. 从米游社 Wiki API 获取各分类数据
+    raw_agents = fetch_agent_names()
+    logging.info(f"共获取到 {len(raw_agents)} 个代理人")
 
     weapons = fetch_weapon_names()
     logging.info(f"共获取到 {len(weapons)} 个音擎")
 
-    others = read_other_words()
-    logging.info(f"共读取到 {len(others)} 个补充词")
+    bangboos = fetch_bangboo_names()
+    logging.info(f"共获取到 {len(bangboos)} 个邦布")
 
-    # 2. 合并所有来源
-    all_words = roles + weapons + others
+    drive_disks = fetch_drive_disk_names()
+    logging.info(f"共获取到 {len(drive_disks)} 个驱动盘")
+
+    materials = fetch_material_names()
+    logging.info(f"共获取到 {len(materials)} 个材料")
+
+    others = read_other_words()
+
+    # 2. 代理人名特殊处理（·/空格拆分）
+    agents = process_agent_names(raw_agents)
+    logging.info(f"代理人名拆分后共 {len(agents)} 个")
+
+    # 3. 合并所有来源
+    all_words = agents + weapons + bangboos + drive_disks + materials + others
     logging.info(f"合并后共 {len(all_words)} 个词（未去重、未预处理）")
 
-    # 3. 通用预处理（返回列表，可能拆分）
+    # 4. 通用预处理（返回列表，可能拆分）
     processed = []
     for w in all_words:
         processed.extend(preprocess_word(w))
     logging.info(f"预处理后共 {len(processed)} 个词（含拆分）")
 
-    # 4. 去重
+    # 5. 去重
     final_words = deduplicate(processed)
     logging.info(f"去重后共 {len(final_words)} 个词")
 
-    # 5. 写入文件
+    # 6. 写入文件
     write_dict_yaml(final_words, version)
 
 

@@ -4,9 +4,13 @@ import os
 import re
 import time
 
-from ys_crawler import fetch_role_names
-from ys_material_crawler import fetch_material_names
-from ys_weapon_crawler import fetch_weapon_names
+from ys_api_crawler import (
+    fetch_role_names,
+    fetch_weapon_names,
+    fetch_artifact_names,
+    fetch_food_names,
+    fetch_bag_item_names,
+)
 
 
 def setup_logging():
@@ -71,6 +75,7 @@ def preprocess_word(word):
     1. 去除（...）及括号本身
     2. 去除「」引号本身，保留内部内容
     3. 去除 · 点号
+    4. 去除【...】及内部内容（如 桑多涅【预告】→ 桑多涅）
     """
     # 1. 去除（...）及括号本身
     word = re.sub(r"（[^）]*）", "", word)
@@ -78,6 +83,8 @@ def preprocess_word(word):
     word = word.replace("「", "").replace("」", "")
     # 3. 去除 · 点号
     word = word.replace("·", "")
+    # 4. 去除【...】及内部内容（如 桑多涅【预告】→ 桑多涅）
+    word = re.sub(r"【[^】]*】", "", word)
     # 最后去除多余空白
     return word.strip()
 
@@ -117,30 +124,38 @@ def main():
     version = get_version()
     logging.info(f"词库版本: {version}")
 
+    # 1. 从米游社 Wiki API 获取各分类数据
     roles = fetch_role_names()
     logging.info(f"共获取到 {len(roles)} 个角色")
 
     weapons = fetch_weapon_names()
     logging.info(f"共获取到 {len(weapons)} 个武器")
 
-    materials = fetch_material_names()
-    logging.info(f"共获取到 {len(materials)} 个材料")
+    artifacts = fetch_artifact_names()
+    logging.info(f"共获取到 {len(artifacts)} 个圣遗物")
+
+    foods = fetch_food_names()
+    logging.info(f"共获取到 {len(foods)} 个食物")
+
+    bag_items = fetch_bag_item_names()
+    logging.info(f"共获取到 {len(bag_items)} 个背包物品")
 
     others = read_other_words()
 
-    # 合并四来源
-    all_words = roles + weapons + materials + others
+    # 2. 合并所有来源
+    all_words = roles + weapons + artifacts + foods + bag_items + others
     logging.info(f"合并后共 {len(all_words)} 个词（未去重）")
 
-    # 预处理
+    # 3. 预处理
     processed = [preprocess_word(w) for w in all_words]
+    processed = [w for w in processed if w]
     logging.info("预处理完成")
 
-    # 去重
+    # 4. 去重
     final_words = deduplicate(processed)
     logging.info(f"去重后共 {len(final_words)} 个词")
 
-    # 写入文件
+    # 5. 写入文件
     write_dict_yaml(final_words, version)
 
 

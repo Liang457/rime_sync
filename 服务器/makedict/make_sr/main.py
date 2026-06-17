@@ -4,9 +4,15 @@ import os
 import re
 import time
 
-from sr_crawler import fetch_role_names
-from sr_weapon_crawler import fetch_weapon_names
-from sr_material_crawler import fetch_material_names
+from sr_api_crawler import (
+    fetch_role_names,
+    fetch_weapon_names,
+    fetch_relic_names,
+    fetch_upgrade_material_names,
+    fetch_consumable_names,
+    fetch_valuable_names,
+    fetch_quest_item_names,
+)
 
 
 def setup_logging():
@@ -183,15 +189,27 @@ def main():
     version = get_version()
     logging.info(f"词库版本: {version}")
 
-    # 1. 获取原始数据
+    # 1. 从米游社 Wiki API 获取各分类数据
     raw_roles = fetch_role_names()
     logging.info(f"共获取到 {len(raw_roles)} 个角色")
 
     weapons = fetch_weapon_names()
     logging.info(f"共获取到 {len(weapons)} 个光锥")
 
-    materials = fetch_material_names()
-    logging.info(f"共获取到 {len(materials)} 个道具")
+    relics = fetch_relic_names()
+    logging.info(f"共获取到 {len(relics)} 个遗器")
+
+    upgrade_materials = fetch_upgrade_material_names()
+    logging.info(f"共获取到 {len(upgrade_materials)} 个养成材料")
+
+    consumables = fetch_consumable_names()
+    logging.info(f"共获取到 {len(consumables)} 个消耗品")
+
+    valuables = fetch_valuable_names()
+    logging.info(f"共获取到 {len(valuables)} 个贵重物")
+
+    quest_items = fetch_quest_item_names()
+    logging.info(f"共获取到 {len(quest_items)} 个任务道具")
 
     others = read_other_words()
 
@@ -201,7 +219,7 @@ def main():
     logging.info(f"角色名预处理后共 {len(roles)} 个")
 
     # 3. 合并所有来源
-    all_words = roles + weapons + materials + others
+    all_words = roles + weapons + relics + upgrade_materials + consumables + valuables + quest_items + others
     logging.info(f"合并后共 {len(all_words)} 个词（未去重、未预处理）")
 
     # 4. 通用预处理（返回列表，可能拆分）
