@@ -11,3 +11,9 @@ $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 # ZZZ词库
 ./venv/Scripts/python.exe rime_client.py run-script make_zzz $timestamp
 ./venv/Scripts/python.exe rime_client.py edit-file rime_ice.dict.yaml 18 "  - cn_dicts/zzz" --action insert
+# 异环词库
+./venv/Scripts/python.exe rime_client.py run-script make_yh $timestamp
+./venv/Scripts/python.exe rime_client.py edit-file rime_ice.dict.yaml 18 "  - cn_dicts/yh" --action insert
+# BV词库
+./venv/Scripts/python.exe rime_client.py run-script make_ba $timestamp
+./venv/Scripts/python.exe rime_client.py edit-file rime_ice.dict.yaml 18 "  - cn_dicts/ba" --action insert

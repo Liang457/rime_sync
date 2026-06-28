@@ -503,6 +503,48 @@ class RimeClient:
             logging.error(f"解压tar文件失败: {e}")
             sys.exit(1)
 
+    @staticmethod
+    def _stop_weasel() -> Optional[str]:
+        """Windows: 停止小狼毫算法服务，返回进程路径供重启使用"""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["powershell", "-Command",
+                 "(Get-Process WeaselServer -ErrorAction SilentlyContinue).Path"],
+                capture_output=True, text=True, timeout=10
+            )
+            weasel_path = result.stdout.strip()
+            subprocess.run(["taskkill", "/f", "/im", "WeaselServer.exe"],
+                           capture_output=True, timeout=10)
+            logging.info("已停止 WeaselServer.exe（避免完整同步时文件锁定）")
+            return weasel_path if weasel_path else None
+        except Exception as e:
+            logging.warning(f"停止 WeaselServer.exe 失败: {e}")
+            return None
+
+    @staticmethod
+    def _start_weasel(weasel_path: Optional[str] = None):
+        """Windows: 重启小狼毫算法服务"""
+        import subprocess
+        import glob as glob_mod
+        try:
+            exe = weasel_path
+            if not exe or not Path(exe).exists():
+                for base in [os.environ.get("ProgramFiles", "C:\\Program Files"),
+                             os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")]:
+                    pattern = os.path.join(base, "Rime", "weasel-*", "WeaselServer.exe")
+                    matches = sorted(glob_mod.glob(pattern), reverse=True)
+                    if matches:
+                        exe = matches[0]
+                        break
+            if exe and Path(exe).exists():
+                subprocess.Popen([exe], creationflags=0x08000000)  # CREATE_NO_WINDOW
+                logging.info("已重启 WeaselServer.exe")
+            else:
+                logging.warning("未找到 WeaselServer.exe，请手动切换输入法以重启服务")
+        except Exception as e:
+            logging.warning(f"重启 WeaselServer.exe 失败: {e}，请手动切换输入法")
+
     def create_sync_tar(self, device_name: str) -> Path:
         """创建sync/{device_name}文件夹的tar包"""
         config_dir = Path(self.config["rime"]["config_dir"])
@@ -1217,9 +1259,16 @@ class RimeClient:
                 f.write(result["raw"])
             logging.info(f"完整配置包已下载: {tar_path}")
 
-            # 解压tar到本地目录
-            extracted_files = self.extract_full_sync_tar(tar_path, config_dir)
-            logging.info(f"解压完成，共 {len(extracted_files)} 个文件")
+            # Windows: 停止小狼毫服务，避免文件锁定导致解压失败
+            is_windows = self.config.get("rime", {}).get("platform") == "windows"
+            weasel_path = self._stop_weasel() if is_windows else None
+
+            try:
+                extracted_files = self.extract_full_sync_tar(tar_path, config_dir)
+                logging.info(f"解压完成，共 {len(extracted_files)} 个文件")
+            finally:
+                if weasel_path is not None:
+                    self._start_weasel(weasel_path)
 
             # 删除临时tar文件
             tar_path.unlink(missing_ok=True)
