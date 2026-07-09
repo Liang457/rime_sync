@@ -1,20 +1,20 @@
-# rime_client.py
+# cli.py
 
-`rime_client.py` 是 [rime-server](https://github.com/i23386/rime_server) 的 Windows 客户端同步脚本，用于与 rime-server 交互，实现 Rime 输入法配置的同步与管理。
+`cli.py` 是 rime-server 的客户端同步工具，用于与 rime-server 交互，实现 Rime 输入法配置的多设备同步与管理。支持 Windows 和 Android (Termux)。
 
 ---
 
 ## 功能特性
 
 - **交互式 CLI**：无参数运行时提供菜单驱动的交互界面，操作简单直观
-- **命令行模式**：支持丰富的子命令，适合脚本化、定时任务等场景
+- **命令行模式**：支持 22 个子命令，适合脚本化、定时任务等场景
 - **rime-ice 仓库更新**：请求服务器拉取最新的 rime-ice 源码
-- **自定义词库脚本**：远程触发服务器上的词库生成脚本
-- **普通词库同步**：下载/同步 `cn_dicts/`、`en_dicts/` 等词库文件
-- **用户输入词库同步**：
+- **自定义词库脚本**：远程触发服务器上的词库生成脚本（单个/批量），自动插入词库到配置
+- **配置哈希增量同步**：按类别（cn/en/lua/opencc）通过 SHA3-256 哈希对比实现增量同步
+- **用户输入词库哈希增量同步**：
   - 自动读取 `installation.yaml` 获取设备标识
-  - 打包上传本机 `sync/<device_name>/` 目录
-  - 下载其他设备的用户词库到本地对应目录
+  - 对比本地与远端 SHA3-256 哈希，仅传输变更文件
+  - 冲突按 mtime 较新者胜出
 - **完整同步**：下载服务器完整配置包，或上传本地配置初始化服务器
 - **配置文件编辑**：支持远程编辑服务器上的配置文件
 - **自动配置迁移**：支持旧版配置格式平滑迁移到新版
@@ -36,15 +36,21 @@ pip install requests pyyaml
 
 ## 快速开始
 
-1. 将 `rime_client.py` 放到你的 Rime 配置目录（如 `%APPDATA%\Rime`）
-2. 首次运行时会自动创建 `client_config.json`：
+1. 将 `cli.py` 和 `core/` 目录放到你的 Rime 配置目录（如 `%APPDATA%\Rime`）
+2. 安装依赖：
 
 ```bash
-python rime_client.py
+pip install requests pyyaml
 ```
 
-3. 编辑 `client_config.json`，填写正确的服务器地址和本地 Rime 配置目录
-4. 再次运行即可开始使用
+3. 首次运行时会自动创建 `client_config.json`：
+
+```bash
+python cli.py
+```
+
+4. 编辑 `client_config.json`，填写正确的服务器地址和本地 Rime 配置目录
+5. 再次运行即可开始使用
 
 ---
 
@@ -95,10 +101,8 @@ python rime_client.py
 
 ### 交互式菜单（推荐新手使用）
 
-直接运行脚本，不带任何参数：
-
 ```bash
-python rime_client.py
+python cli.py
 ```
 
 会显示如下菜单：
@@ -115,13 +119,13 @@ Rime 配置目录: C:\Users\Username\AppData\Roaming\Rime
 
 请选择操作:
  1. 请求服务器更新 rime-ice 仓库
- 2. 执行自定义词库脚本
- 3. 同步用户输入词库
- 4. 同步普通词库 (cn_dicts/en_dicts)
+ 2. 执行自定义词库脚本（单个/全部列出/批量执行）
+ 3. 同步用户输入词库（哈希增量）
+ 4. 同步配置 (cn/en/lua/opencc/全部)
  5. 编辑配置文件
  6. 完整同步 (下载/上传)
  7. 查看同步状态
- 8. 获取设备列表
+ 8. 设备列表
  9. 健康检查
  10. 修改配置
  11. 退出
@@ -133,40 +137,45 @@ Rime 配置目录: C:\Users\Username\AppData\Roaming\Rime
 
 ```bash
 # 通用选项
-python rime_client.py --help
-python rime_client.py --config ./custom_config.json
-python rime_client.py -v
+python cli.py --help
+python cli.py --config ./custom_config.json
+python cli.py -v
 
 # 服务器状态
-python rime_client.py status
+python cli.py status
 
 # 更新 rime-ice（可加 --force 强制更新）
-python rime_client.py update-rime-ice
+python cli.py update-rime-ice
 
 # 运行自定义词库脚本
-python rime_client.py run-script yuanshen 6.5.1
+python cli.py run-script yuanshen 6.5.1              # 单个（自动添加词库）
+python cli.py run-script yuanshen 6.5.1 --no-add-to-dict  # 不自动添加
+python cli.py run-all-scripts 6.5.1                  # 批量执行
+python cli.py list-scripts                           # 列出可用脚本
 
-# 同步用户输入词库
-python rime_client.py sync-userdb --action upload          # 上传本机词库
-python rime_client.py sync-userdb --action download        # 下载其他设备词库
+# 同步用户输入词库（哈希增量对比，仅传输变更文件）
+python cli.py sync-userdb --action upload            # 上传本机词库
+python cli.py sync-userdb --action download          # 下载其他设备词库
 
-# 同步普通词库
-python rime_client.py sync-dict                # 同步全部
-python rime_client.py sync-dict --category cn  # 仅同步中文词库
+# 同步配置（哈希增量）
+python cli.py sync-dict                              # 同步全部 (cn/en/lua/opencc)
+python cli.py sync-dict --category cn                # 仅同步中文词库
+python cli.py sync-dict --category lua               # 同步 lua 脚本
+python cli.py sync-dict --category opencc            # 同步 OpenCC 配置
 
 # 完整同步
-python rime_client.py full-sync-download       # 从服务器下载完整配置
-python rime_client.py full-sync-upload backup.zip --overwrite  # 上传配置初始化服务器
+python cli.py full-sync-download                     # 从服务器下载完整配置
+python cli.py full-sync-upload backup.zip --overwrite # 上传配置初始化服务器
 
 # 查看设备列表和同步信息
-python rime_client.py device-list
-python rime_client.py sync-info
+python cli.py device-list
+python cli.py sync-info
 
 # 健康检查
-python rime_client.py health
+python cli.py health
 
 # 强制进入交互式菜单
-python rime_client.py interactive
+python cli.py interactive
 ```
 
 ---
@@ -177,18 +186,20 @@ python rime_client.py interactive
 |------|------|
 | `status` | 获取服务器状态 |
 | `update-rime-ice` | 请求更新 rime-ice 仓库 |
-| `run-script <name> <version>` | 执行自定义词库生成脚本 |
+| `run-script <name> <version>` | 执行单个词库脚本（自动添加到 dict.yaml） |
+| `run-all-scripts <version>` | 批量执行全部词库脚本 |
+| `list-scripts` | 列出服务器可用脚本 |
 | `edit-file <path> <line> <content>` | 编辑服务器上的配置文件 |
 | `upload-config <file>` | 上传 `*.custom.yaml` 配置文件 |
-| `sync-userdb` | 同步用户输入词库（上传/下载） |
-| `sync-upload-zip` | 上传用户词库 ZIP 包 |
+| `sync-userdb` | 同步用户输入词库（哈希增量上传/下载） |
+| `sync-upload-tar` | 上传用户词库 tar 包 |
 | `sync-upload-file <file>` | 上传单个用户词库文件 |
 | `sync-info` | 查看用户词库同步信息 |
-| `sync-download-zip` | 下载用户词库 ZIP 包 |
+| `sync-download-tar` | 下载用户词库 tar 包 |
 | `sync-download-file <filename>` | 下载单个用户词库文件 |
-| `sync-dict` | 同步普通词库 |
+| `sync-dict` | 同步配置（cn/en/lua/opencc，哈希增量） |
 | `dict-info` | 查看词库信息 |
-| `dict-download-zip` | 下载词库 ZIP 包 |
+| `dict-download-tar` | 下载词库 tar 包 |
 | `dict-download-file <filename>` | 下载单个词库文件 |
 | `full-sync-info` | 查看完整配置包信息 |
 | `full-sync-download` | 下载完整配置包 |
@@ -202,18 +213,25 @@ python rime_client.py interactive
 ## 项目文件结构
 
 ```
-rime_server/
-├── rime_client.py          # 主程序（本文件）
-├── client_config.json      # 客户端配置文件（自动创建）
-├── rime_client.log         # 运行日志
-├── run_win.ps1             # Windows 快速启动脚本
-├── doc/                    # 设计文档
-│   ├── 客户端设计.md
-│   ├── 服务端设计.md
-│   ├── 系统设计.md
-│   ├── 项目大纲.md
-│   └── 客户端规划.md
-└── venv/                   # Python 虚拟环境
+客户端/
+├── cli.py                   # CLI 入口（22子命令 + 交互菜单）
+├── core/                    # 核心逻辑模块库
+│   ├── __init__.py
+│   ├── config.py            # 配置管理器
+│   ├── api.py               # HTTP API 客户端
+│   ├── sync.py              # 用户词库哈希增量同步
+│   ├── dicts.py             # 配置增量同步 (SyncState)
+│   ├── hash_utils.py        # SHA3-256 哈希计算
+│   ├── fullsync.py          # 完整配置同步
+│   ├── tar_utils.py         # tar 安全解压
+│   ├── platform.py          # 平台相关（Weasel 启停）
+│   ├── logs.py              # 日志归档/压缩/清理
+│   └── errors.py            # 异常类
+├── client_config.json       # 客户端配置文件（自动创建）
+├── run_win.ps1              # Windows 快速启动脚本
+├── 快速同步.ps1              # 快速同步脚本
+├── 远端同步.ps1              # 远端批量同步脚本
+└── venv/                    # Python 虚拟环境
 ```
 
 ---

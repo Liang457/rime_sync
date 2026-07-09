@@ -54,19 +54,22 @@ sudo systemctl status rime-server
 cd 客户端
 pip install requests pyyaml
 # 首次运行自动创建 client_config.json
-python rime_client.py
+python cli.py
 # 编辑 client_config.json 填入服务器地址和 Rime 配置目录
 ```
 
 客户端支持交互式菜单（无参数运行）和命令行模式：
 
 ```bash
-python rime_client.py status                    # 服务器状态
-python rime_client.py sync-userdb --action upload   # 上传用户词库
-python rime_client.py sync-userdb --action download # 下载用户词库
-python rime_client.py sync-dict --category cn       # 同步中文词库
-python rime_client.py update-rime-ice               # 更新 rime-ice
-python rime_client.py health                        # 健康检查
+python cli.py status                              # 服务器状态
+python cli.py sync-userdb --action upload         # 上传用户词库（哈希增量）
+python cli.py sync-userdb --action download       # 下载用户词库（哈希增量）
+python cli.py sync-dict --category cn             # 同步中文词库
+python cli.py sync-dict --category lua            # 同步 lua 脚本
+python cli.py update-rime-ice                     # 更新 rime-ice
+python cli.py run-script <name> <version>         # 单个脚本（自动添加词库）
+python cli.py run-all-scripts <version>           # 批量脚本
+python cli.py health                              # 健康检查
 ```
 
 ## 目录结构
@@ -93,7 +96,18 @@ rime-sync/
 │   ├── sync/                 # 各设备用户输入词库
 │   └── backups/              # 定期备份
 ├── 客户端/                    # Python CLI 客户端
-│   ├── rime_client.py        # 主程序
+│   ├── cli.py                # CLI 入口（22子命令 + 交互菜单）
+│   ├── core/                 # 核心逻辑模块
+│   │   ├── config.py         # 配置管理器
+│   │   ├── api.py            # HTTP API 客户端
+│   │   ├── sync.py           # 用户词库哈希增量同步
+│   │   ├── dicts.py          # 配置增量同步 (SyncState)
+│   │   ├── hash_utils.py     # SHA3-256 哈希计算
+│   │   ├── fullsync.py       # 完整配置同步
+│   │   ├── tar_utils.py      # tar 安全解压
+│   │   ├── platform.py       # 平台相关（Weasel 启停）
+│   │   ├── logs.py           # 日志归档/压缩/清理
+│   │   └── errors.py         # 异常类
 │   └── client_config.json    # 客户端配置
 └── doc/                      # 设计文档
 ```
@@ -110,11 +124,12 @@ rime-sync/
 
 ## 最近更新
 
+- **客户端模块化重构**: 拆分单体脚本为 `core/` 模块库 + `cli.py` 薄 CLI 层
+- **哈希增量同步**: 用户词库按 SHA3-256 diff 仅传输变更文件；配置通过 SyncState + since 参数实现增量下载
+- **新增命令**: `run-all-scripts`（批量脚本执行）、`list-scripts`（列出可用脚本）
+- **`run-script` 增强**: 自动将生成词库插入 `rime_ice.dict.yaml`（可通过 `--no-add-to-dict` 禁用）
 - 使用 **Waitress** 替代 Flask 开发服务器，提升生产环境稳定性
 - 修复 `send_file` 流式传输与临时文件删除的竞态条件
 - 日志系统升级为 **RotatingFileHandler**，防止磁盘占满
 - Git 操作（clone/fetch/pull）添加 **120 秒超时保护**
 - `copy_to_runtime` 增加**备份-复制-恢复**机制，防止更新失败导致服务中断
-- 脚本执行超时采用**进程组清理**，避免孤儿/僵尸子进程
-- 配置热重载失败时**自动回滚**到旧配置
-- 新增 **systemd 服务文件**，支持开机自启与崩溃自动重启
