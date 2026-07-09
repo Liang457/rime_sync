@@ -129,13 +129,21 @@ def build_parser():
     return parser
 
 
-def _auto_add_to_dict(api, script_name, dict_line):
-    try:
-        content = f"  - cn_dicts/{script_name}"
-        api.edit_file("rime_ice.dict.yaml", dict_line, content, "insert")
-        logger.info(f"已添加 {content} 到 rime_ice.dict.yaml 第{dict_line}行")
-    except Exception as e:
-        logger.warning(f"添加到 rime_ice.dict.yaml 失败: {e}")
+def _auto_add_to_dict(api, output_files, dict_line):
+    for fname in output_files:
+        if fname.endswith('.dict.yaml'):
+            dict_name = fname[:-10]
+        elif fname.endswith('.yaml'):
+            dict_name = fname[:-5]
+        else:
+            dict_name = fname
+        try:
+            content = f"  - cn_dicts/{dict_name}"
+            api.edit_file("rime_ice.dict.yaml", dict_line, content, "insert")
+            logger.info(f"已添加 {content} 到 rime_ice.dict.yaml 第{dict_line}行")
+            dict_line += 1
+        except Exception as e:
+            logger.warning(f"添加到 rime_ice.dict.yaml 失败: {e}")
 
 
 def show_interactive_menu(config, api):
@@ -249,7 +257,7 @@ def show_interactive_menu(config, api):
                     logger.info(f"生成大小: {total_size} 字节")
 
                     if add_to_dict and result.get("success"):
-                        _auto_add_to_dict(api, script_name, dict_line)
+                        _auto_add_to_dict(api, output_files, dict_line)
 
                 elif sub_choice == "3":
                     result = api.list_scripts()
@@ -290,7 +298,7 @@ def show_interactive_menu(config, api):
                                 logger.info(f"  {s}: 完成")
 
                             if add_to_dict and result.get("success"):
-                                _auto_add_to_dict(api, s, dict_line)
+                                _auto_add_to_dict(api, output_files, dict_line)
 
                             success_count += 1
                         except Exception as e:
@@ -477,7 +485,7 @@ def _dispatch_command(args, config, api):
         logger.info(f"生成大小: {total_size} 字节")
 
         if not getattr(args, 'no_add_to_dict', False) and result.get("success"):
-            _auto_add_to_dict(api, args.script_name, getattr(args, 'dict_line', 18))
+            _auto_add_to_dict(api, output_files, getattr(args, 'dict_line', 18))
 
         return data
 
@@ -520,7 +528,7 @@ def _dispatch_command(args, config, api):
                     logger.info(f"  {s}: 完成")
 
                 if not no_add and result.get("success"):
-                    _auto_add_to_dict(api, s, dict_line)
+                    _auto_add_to_dict(api, output_files, dict_line)
 
                 success_count += 1
             except Exception as e:
