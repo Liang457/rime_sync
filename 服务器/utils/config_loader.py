@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import copy
 from datetime import datetime
 from pathlib import Path
 
@@ -145,7 +146,7 @@ class ConfigManager:
     def reload(self):
         """重新加载所有配置文件（失败时自动回滚）"""
         self.logger.info("重新加载所有配置文件")
-        old_configs = {k: v.copy() for k, v in self.configs.items()}
+        old_configs = copy.deepcopy(self.configs)
         try:
             self.load_all_configs()
         except Exception as e:

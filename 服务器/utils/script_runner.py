@@ -105,10 +105,13 @@ class ScriptRunner:
                 try:
                     stdout, stderr = process.communicate(timeout=self.max_execution_time)
                 except subprocess.TimeoutExpired:
-                    # 杀整个进程组，避免孤儿/僵尸子进程
+                    # 超时终止进程（优先杀进程组，Windows 下回退到 process.kill）
                     try:
-                        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-                        process.wait(timeout=5)
+                        if hasattr(os, 'killpg') and hasattr(signal, 'SIGTERM'):
+                            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                            process.wait(timeout=5)
+                        else:
+                            process.kill()
                     except Exception:
                         process.kill()
                     stdout, stderr = process.communicate()

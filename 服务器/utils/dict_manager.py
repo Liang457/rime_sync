@@ -2,7 +2,6 @@ import os
 import json
 import logging
 import tarfile
-import hashlib
 import tempfile
 from pathlib import Path
 from datetime import datetime
@@ -10,6 +9,7 @@ from typing import List, Dict, Optional
 
 from utils.config_loader import config_manager
 from utils.error_handler import APIError
+from utils.hash_utils import compute_file_hash, safe_parse_iso
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class DictManager:
         since_time = None
         if since:
             try:
-                since_time = datetime.fromisoformat(since.replace('Z', '+00:00'))
+                since_time = safe_parse_iso(since)
             except ValueError:
                 raise APIError("无效的时间格式，请使用ISO格式", 400)
         
@@ -167,7 +167,7 @@ class DictManager:
         since_time = None
         if since:
             try:
-                since_time = datetime.fromisoformat(since.replace('Z', '+00:00'))
+                since_time = safe_parse_iso(since)
             except ValueError:
                 raise APIError("无效的时间格式，请使用ISO格式", 400)
 
@@ -207,16 +207,7 @@ class DictManager:
             raise APIError(f"创建tar文件失败: {str(e)}", 500)
     
     def _calculate_hash(self, filepath: Path) -> str:
-        """计算文件哈希（SHA3-256）"""
-        hash_obj = hashlib.sha3_256()
-        
-        try:
-            with open(filepath, 'rb') as f:
-                for chunk in iter(lambda: f.read(4096), b''):
-                    hash_obj.update(chunk)
-            return f"sha3-256:{hash_obj.hexdigest()}"
-        except Exception as e:
-            logger.error(f"计算文件哈希失败: {filepath}, 错误: {e}")
-            raise APIError(f"计算文件哈希失败: {str(e)}", 500)
-
+        """计算文件 SHA3-256 哈希"""
+        return compute_file_hash(filepath)
+    
 dict_manager = DictManager()

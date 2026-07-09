@@ -2,7 +2,6 @@ import os
 import json
 import logging
 import tarfile
-import hashlib
 import shutil
 import errno
 from pathlib import Path
@@ -11,13 +10,13 @@ from typing import List, Dict, Optional
 
 from utils.config_loader import config_manager
 from utils.error_handler import APIError
+from utils.hash_utils import compute_file_hash, safe_parse_iso
 
 logger = logging.getLogger(__name__)
 
 class SyncManager:
     def __init__(self):
         self.sync_base = Path(config_manager.get("server", "paths.sync"))
-        self.hash_algorithm = config_manager.get("sync", "sync.hash_algorithm", "sha3-256")
         self.manifest_filename = config_manager.get("sync", "sync.manifest_file", "_manifest.json")
         self.max_files_per_device = config_manager.get("sync", "sync.max_files_per_device", 100)
         self.max_total_size_mb = config_manager.get("sync", "sync.max_total_size_mb", 1024)
@@ -46,21 +45,8 @@ class SyncManager:
         return True
     
     def calculate_hash(self, filepath: Path) -> str:
-        """计算文件哈希"""
-        if self.hash_algorithm == "sha3-256":
-            hash_obj = hashlib.sha3_256()
-        else:
-            # 默认为sha256
-            hash_obj = hashlib.sha256()
-        
-        try:
-            with open(filepath, 'rb') as f:
-                for chunk in iter(lambda: f.read(4096), b''):
-                    hash_obj.update(chunk)
-            return f"{self.hash_algorithm}:{hash_obj.hexdigest()}"
-        except Exception as e:
-            logger.error(f"计算文件哈希失败: {filepath}, 错误: {e}")
-            raise APIError(f"计算文件哈希失败: {str(e)}", 500)
+        """计算文件 SHA3-256 哈希"""
+        return compute_file_hash(filepath)
     
     def load_manifest(self, device_name: str) -> Dict:
         """加载设备的清单文件"""
@@ -297,7 +283,7 @@ class SyncManager:
                 modified = file_info.get("modified")
                 if modified:
                     try:
-                        modified_dt = datetime.fromisoformat(modified.replace('Z', '+00:00'))
+                        modified_dt = safe_parse_iso(modified)
                         if last_sync is None or modified_dt > last_sync:
                             last_sync = modified_dt
                     except (ValueError, TypeError):
@@ -355,7 +341,7 @@ class SyncManager:
                         # 检查时间筛选
                         if since:
                             file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                            since_time = datetime.fromisoformat(since.replace('Z', '+00:00'))
+                            since_time = safe_parse_iso(since)
                             if file_mtime < since_time:
                                 continue
 

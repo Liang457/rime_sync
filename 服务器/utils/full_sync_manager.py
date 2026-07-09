@@ -2,7 +2,6 @@ import os
 import json
 import logging
 import tarfile
-import hashlib
 import shutil
 import tempfile
 from pathlib import Path
@@ -11,13 +10,13 @@ from typing import List, Dict, Optional, Set
 
 from utils.config_loader import config_manager
 from utils.error_handler import APIError
+from utils.hash_utils import compute_file_hash, safe_parse_iso
 
 logger = logging.getLogger(__name__)
 
 class FullSyncManager:
     def __init__(self):
         self.runtime_path = Path(config_manager.get("server", "paths.runtime"))
-        self.hash_algorithm = config_manager.get("sync", "sync.hash_algorithm", "sha3-256")
         
         # 默认排除的文件和目录
         self.default_excludes = [
@@ -28,21 +27,8 @@ class FullSyncManager:
         ]
     
     def calculate_hash(self, filepath: Path) -> str:
-        """计算文件哈希"""
-        if self.hash_algorithm == "sha3-256":
-            hash_obj = hashlib.sha3_256()
-        else:
-            # 默认为sha256
-            hash_obj = hashlib.sha256()
-        
-        try:
-            with open(filepath, 'rb') as f:
-                for chunk in iter(lambda: f.read(4096), b''):
-                    hash_obj.update(chunk)
-            return f"{self.hash_algorithm}:{hash_obj.hexdigest()}"
-        except Exception as e:
-            logger.error(f"计算文件哈希失败: {filepath}, 错误: {e}")
-            raise APIError(f"计算文件哈希失败: {str(e)}", 500)
+        """计算文件 SHA3-256 哈希"""
+        return compute_file_hash(filepath)
     
     def get_exclude_patterns(self, extra_excludes: str = None) -> Set[str]:
         """获取排除模式集合"""
@@ -93,7 +79,7 @@ class FullSyncManager:
             # 时间筛选
             if since:
                 file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                since_time = datetime.fromisoformat(since.replace('Z', '+00:00'))
+                since_time = safe_parse_iso(since)
                 if file_mtime < since_time:
                     continue
             
@@ -155,7 +141,7 @@ class FullSyncManager:
                 os.unlink(temp_tar.name)
             raise APIError(f"创建tar文件失败: {str(e)}", 500)
 
-    def upload_tar(self, tar_content, overwrite: bool = False) -> Dict:
+    def upload_tar(self, tar_content, overwrite: bool = False, hash_value: str = None) -> Dict:
         """上传完整配置包tar文件"""
         if not overwrite:
             raise APIError("完整配置包上传需要明确设置 overwrite=true 确认操作", 400)
@@ -173,6 +159,15 @@ class FullSyncManager:
                 tar_content.seek(0)
                 with open(tar_path, 'wb') as f:
                     f.write(tar_content.read())
+
+            # 验证哈希（如果提供了）
+            if hash_value:
+                actual_hash = compute_file_hash(tar_path)
+                if actual_hash != hash_value:
+                    raise APIError(
+                        f"哈希校验失败: 期望 {hash_value[:16]}..., 实际 {actual_hash[:16]}...",
+                        400
+                    )
 
             # 验证tar文件
             try:

@@ -55,8 +55,8 @@ def setup_logging():
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # 归档非当天的旧日志（在创建新 handler 之前）
-    archive_enabled = config_manager.get("log_archive", "log_archive.enabled", True)
-    retention_days = config_manager.get("log_archive", "log_archive.retention_days", 90)
+    archive_enabled = config_manager.get("server", "log_archive.enabled", True)
+    retention_days = config_manager.get("server", "log_archive.retention_days", 90)
     if archive_enabled:
         lm = LogManager(log_dir, retention_days)
         lm.archive_old_logs()
@@ -97,6 +97,8 @@ def create_app():
         config_manager.get("server", "server.max_upload_size_mb", 100) * 1024 * 1024
     )
     
+    app.config['START_TIME'] = datetime.now()
+    
     logger = setup_logging()
     
     register_error_handlers(app)
@@ -126,10 +128,15 @@ def create_app():
         from utils.rime_ice_manager import get_rime_ice_version
         version = get_rime_ice_version()
         
+        uptime_seconds = int((datetime.now() - app.config.get('START_TIME', datetime.now())).total_seconds())
+        hours, remainder = divmod(uptime_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        uptime_str = f"{hours}h {minutes}m {seconds}s"
+        
         return success_response({
             "version": "1.0",
             "rime_ice_version": version,
-            "uptime": "待实现",
+            "uptime": uptime_str,
             "storage_usage": "待实现"
         })
     
@@ -207,7 +214,7 @@ def create_app():
         from utils.script_runner import script_runner
 
         # 安全检查：script_name 不能包含路径遍历字符
-        if not script_name or '..' in script_name or '/' in script_name or '\\' in script_name:
+        if not script_name or '..' in script_name or '/' in script_name or '\\' in script_name or ':' in script_name or '\0' in script_name:
             return error_response("无效的脚本名称", 400)
 
         if not request.is_json:
@@ -511,10 +518,8 @@ def create_app():
         if file.filename == '':
             return error_response("没有选择文件", 400)
 
-        # TODO: 验证哈希值（如果提供）
-
         try:
-            result = full_sync_manager.upload_tar(file, overwrite)
+            result = full_sync_manager.upload_tar(file, overwrite, hash_value)
             return success_response(result, "完整配置包上传成功")
         except APIError as e:
             return error_response(e.message, e.code, e.details)
