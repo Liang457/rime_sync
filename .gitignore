@@ -27,6 +27,9 @@ logs/
 *.swo
 *~
 
+# Client config (user-specific, don't overwrite on pull)
+客户端/client_config.json
+
 # Claude
 .claude/
 CLAUDE.md
