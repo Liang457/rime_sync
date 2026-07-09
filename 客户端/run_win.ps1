@@ -1,1 +1,1 @@
-./venv/Scripts/python.exe rime_client.py
+./venv/Scripts/python.exe cli.py
