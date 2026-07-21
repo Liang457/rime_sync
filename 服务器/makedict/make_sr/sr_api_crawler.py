@@ -14,8 +14,8 @@ APP_SN = "sr_wiki"
 
 HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) "
-        "Gecko/20100101 Firefox/150.0"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) "
+        "Gecko/20100101 Firefox/153.0"
     ),
     "Accept": "application/json",
     "Referer": "https://wiki.mihoyo.com/sr/",
