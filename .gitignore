@@ -30,8 +30,9 @@ logs/
 # Client config (user-specific, don't overwrite on pull)
 客户端/client_config.json
 
-# Claude
+# AI assistant context files (local only, not part of the repo)
 .claude/
+AGENTS.md
 CLAUDE.md
 
 # OS
