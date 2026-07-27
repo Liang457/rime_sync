@@ -27,7 +27,7 @@ HEADERS = {
 }
 
 # 收录的板块 ID（仅收录游戏实体名称，跳过材料子分类标签）
-SECTION_IDS = {
+_SECTION_IDS = {
     "实装学生": 49443,
     "NPC及卫星": 107619,
     "礼物": 107816,
@@ -37,6 +37,8 @@ SECTION_IDS = {
 _CACHED_DATA = None
 
 RETRY_MAX = 3
+
+_CHINESE_RE = re.compile(r"[一-鿿]")
 
 
 def _fetch_json():
@@ -146,7 +148,7 @@ def _extract_chinese_aliases(nodes):
                         if not alias:
                             continue
                         # 仅保留含中文字符的别名（过滤纯假名/纯英文/纯数字）
-                        if re.search(r"[一-鿿]", alias) and alias not in seen:
+                        if _CHINESE_RE.search(alias) and alias not in seen:
                             seen.add(alias)
                             aliases.append(alias)
 
@@ -180,21 +182,21 @@ def _fetch_section(section_id):
 
 def fetch_student_names():
     """获取所有实装学生名 + 中文别名。"""
-    return _fetch_section(49443)
+    return _fetch_section(_SECTION_IDS["实装学生"])
 
 
 def fetch_npc_names():
     """获取所有 NPC 及卫星名 + 中文别名。"""
-    return _fetch_section(107619)
+    return _fetch_section(_SECTION_IDS["NPC及卫星"])
 
 
 def fetch_gift_names():
     """获取所有礼物名 + 中文别名。"""
-    return _fetch_section(107816)
+    return _fetch_section(_SECTION_IDS["礼物"])
 
 
 if __name__ == "__main__":
-    for cat, sid in SECTION_IDS.items():
+    for cat, sid in _SECTION_IDS.items():
         names, aliases = _fetch_section(sid)
         print(
             f"\n=== {cat} (section_id={sid})："

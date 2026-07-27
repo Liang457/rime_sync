@@ -9,6 +9,10 @@ from ba_api_crawler import (
     fetch_npc_names,
     fetch_gift_names,
 )
+from moegirl_crawler import fetch_surnames
+
+_CHINESE_RE = re.compile(r"[一-鿿]")
+_CHINESE_ONLY_RE = re.compile(r"[一-鿿]+")
 
 
 def setup_logging():
@@ -22,8 +26,8 @@ def setup_logging():
 
 def get_version():
     """
-    解析命令行参数获取版本名。
-    若未提供参数或解析失败，则使用当前时间戳作为 fallback。
+    从命令行参数获取版本名，未提供时用当前整数时间戳作为版本名。
+    使用 parse_known_args 避免 argparse 遇到 --help 等参数时触发 SystemExit。
     """
     parser = argparse.ArgumentParser(description="生成蔚蓝档案词库 ba.dict.yaml")
     parser.add_argument(
@@ -32,15 +36,10 @@ def get_version():
         default=None,
         help="词库版本名（可选，默认为当前时间戳）",
     )
-    try:
-        args = parser.parse_args()
-    except SystemExit:
-        logging.warning("命令行参数解析失败，使用 time.time() 作为版本名")
-        return str(time.time())
-
+    args, _ = parser.parse_known_args()
     if args.version:
         return args.version
-    return str(time.time())
+    return str(int(time.time()))
 
 
 def read_other_words(filepath="other.txt"):
@@ -87,6 +86,11 @@ def process_character_name(name):
     parts = [p.strip() for p in name.split(sep) if p.strip()]
     joined = name.replace(sep, "").replace(" ", "")
     return [joined] + parts
+
+
+def is_chinese_word(w):
+    """判断是否含中文字符，用于过滤纯外文主词条。"""
+    return bool(_CHINESE_RE.search(w))
 
 
 def preprocess_word(word):
@@ -146,15 +150,12 @@ def preprocess_word(word):
     results = [r for r in results if r]
 
     # 8. 英文部分去除
-    #    若词中含中文，则去除连续的英文字母+数字片段
-    #    纯英文词保留
+    #    若词中含中文，则去除连续的英文字母+数字片段后保留
+    #    纯非中文词直接丢弃（上层会用 fullmatch 做二次过滤，此处提前清理）
     new_results = []
     for w in results:
-        if re.search(r"[一-鿿]", w):
+        if _CHINESE_RE.search(w):
             w = re.sub(r"[a-zA-Z0-9.]+", "", w).strip()
-            if w:
-                new_results.append(w)
-        else:
             if w:
                 new_results.append(w)
     results = new_results
@@ -163,7 +164,10 @@ def preprocess_word(word):
     results = [w.replace("·", "").replace("•", "").strip() for w in results]
     results = [r for r in results if r]
 
-    # 10. 清除残留的半角括号（当 · 在括号内时，角色名拆分可能拆断括号边界）
+    # 10. 清除残留的半角括号
+    #     解释：角色名中的 · 若出现在括号内，process_character_name 按 · 拆分后
+    #     可能导致括号成对关系断裂。步骤 3 的 (...) 移除是基于完整括号对的，断裂的
+    #     残缺括号会被遗漏，因此在此处统一清理所有残留半角括号。
     results = [w.replace("(", "").replace(")", "").strip() for w in results]
     results = [r for r in results if r]
 
@@ -236,26 +240,64 @@ def main():
     npcs = [n for n in npcs if n]
     logging.info(f"NPC 名拆分后共 {len(npcs)} 个")
 
-    # 3. 合并所有来源
+    # 3. 从萌娘百科抓取带姓全名（姓 + 名）
+    try:
+        surnamed = fetch_surnames()  # [(日文姓, 日文名, 中文全名), ...]
+        full_names_cn = [t[2] for t in surnamed]
+        surnames_cn = [
+            t[2][:len(t[0])]
+            for t in surnamed
+            if len(t[2]) >= len(t[0]) and t[2].startswith(t[0])
+        ]
+        logging.info(
+            f"从萌娘百科抓取到 {len(surnamed)} 个带姓全名，"
+            f"{len(surnames_cn)} 个姓氏"
+        )
+    except Exception as e:
+        logging.warning(f"萌娘百科抓取失败，跳过全名补充: {e}")
+        full_names_cn = []
+        surnames_cn = []
+
+    # 4. 合并所有来源
     all_words = (
         students + student_aliases
         + npcs + npc_aliases
         + gifts + gift_aliases
         + others
+        + full_names_cn + surnames_cn
     )
     logging.info(f"合并后共 {len(all_words)} 个词（未去重、未预处理）")
 
-    # 4. 通用预处理（返回列表，可能拆分）
+    # 5. 通用预处理（返回列表，可能拆分）
+    #    两阶段过滤：
+    #      预处理前：快速筛掉不含中文或长度不足 2 的词，避免不必要的预处理开销
+    #      预处理后：再次校验结果为纯中文且长度 ≥ 2
+    #              预处理可能通过拆分/剥离去掉非中文部分，此阶段确保最终词条质量
     processed = []
     for w in all_words:
-        processed.extend(preprocess_word(w))
+        w = w.strip()
+        if not w:
+            continue
+        if not is_chinese_word(w):
+            continue
+        if len(w) < 2:
+            continue
+        for p in preprocess_word(w):
+            p = p.strip()
+            if not p:
+                continue
+            if not _CHINESE_ONLY_RE.fullmatch(p):
+                continue
+            if len(p) < 2:
+                continue
+            processed.append(p)
     logging.info(f"预处理后共 {len(processed)} 个词（含拆分）")
 
-    # 5. 去重
+    # 6. 去重
     final_words = deduplicate(processed)
     logging.info(f"去重后共 {len(final_words)} 个词")
 
-    # 6. 写入文件
+    # 7. 写入文件
     write_dict_yaml(final_words, version)
 
 
