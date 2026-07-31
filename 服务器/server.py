@@ -29,6 +29,13 @@ from flask_cors import CORS
 TAR_CACHE = Path(tempfile.gettempdir()) / "rime_server_tar_cache"
 TAR_CACHE.mkdir(parents=True, exist_ok=True)
 
+# 启动时清理上次残留的临时文件
+for _stale in TAR_CACHE.iterdir():
+    try:
+        _stale.unlink()
+    except OSError:
+        pass
+
 def _cleanup_tar_cache():
     """进程退出时清理缓存目录"""
     if TAR_CACHE.exists():
@@ -142,10 +149,11 @@ def create_app():
     
     @app.route('/api/health', methods=['GET'])
     def health_check():
-        import shutil
         import psutil
         
-        disk_usage = shutil.disk_usage("/")
+        # 使用工作目录所在磁盘，避免 Windows 上硬编码 "/" 的问题
+        disk_path = os.getcwd()
+        disk_usage = shutil.disk_usage(disk_path)
         memory_usage = psutil.virtual_memory()
         
         disk_percent = round((disk_usage.used / disk_usage.total) * 100, 2) if disk_usage.total > 0 else 0
@@ -195,8 +203,11 @@ def create_app():
         content = data.get('content')
         action = data.get('action', 'insert')
         
-        if not file_path or line is None or not content:
-            return error_response("缺少必要参数: path, line, content", 400)
+        if not file_path or line is None:
+            return error_response("缺少必要参数: path, line", 400)
+        
+        if action != 'delete' and not content:
+            return error_response("缺少必要参数: content", 400)
         
         try:
             line = int(line)
@@ -299,7 +310,7 @@ def create_app():
         
         try:
             if device:
-                result = sync_manager.get_file_info(device)
+                result = sync_manager.get_file_info(device, since=since)
             else:
                 # 返回所有设备信息
                 devices = sync_manager.list_devices()

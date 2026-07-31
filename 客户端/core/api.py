@@ -55,6 +55,47 @@ class APIClient:
     def _request_bytes(self, method: str, endpoint: str, **kwargs) -> bytes:
         return self._request(method, endpoint, **kwargs).content
 
+    def _download_to_file(self, endpoint: str, target_path, params=None):
+        """流式下载文件到磁盘，避免大文件占用内存"""
+        from pathlib import Path
+        url = f"{self.config.server_url}{endpoint}"
+        target = Path(target_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        kwargs = {"timeout": self.config.timeout, "verify": self.config.verify_ssl,
+                  "stream": True}
+        if params:
+            kwargs["params"] = params
+
+        for attempt in range(1, self.config.retry_count + 1):
+            try:
+                response = self.session.get(url, **kwargs)
+                response.raise_for_status()
+                with open(target, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                return target
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                if attempt < self.config.retry_count:
+                    wait = 2 ** attempt
+                    logger.warning(f"下载失败 (尝试 {attempt}/{self.config.retry_count})，{wait}秒后重试: {e}")
+                    time.sleep(wait)
+                    continue
+                raise APIError(f"下载失败，已达最大重试次数: {url}")
+            except requests.exceptions.HTTPError as e:
+                error_msg = str(e)
+                try:
+                    if response.headers.get("content-type", "").startswith("application/json"):
+                        error_data = response.json()
+                        error_msg = error_data.get('error', str(e))
+                except Exception:
+                    pass
+                raise APIError(error_msg)
+            except APIError:
+                raise
+            except Exception as e:
+                raise APIError(f"下载失败: {e}")
+
     def get_status(self) -> Dict[str, Any]:
         logger.info("获取服务器状态...")
         return self._request_json("GET", "/api/status")

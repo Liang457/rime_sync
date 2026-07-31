@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class SyncManager:
     def __init__(self):
-        self.sync_base = Path(config_manager.get("server", "paths.sync"))
+        self.sync_base = Path(config_manager.resolve_path(config_manager.get("server", "paths.sync")))
         self.manifest_filename = config_manager.get("sync", "sync.manifest_file", "_manifest.json")
         self.max_files_per_device = config_manager.get("sync", "sync.max_files_per_device", 100)
         self.max_total_size_mb = config_manager.get("sync", "sync.max_total_size_mb", 1024)
@@ -99,14 +99,21 @@ class SyncManager:
         device_path = self.get_device_path(device_name)
         device_path.mkdir(parents=True, exist_ok=True)
         
+        # 安全检查：防止路径遍历
+        file_path = (device_path / filename).resolve()
+        try:
+            file_path.relative_to(device_path.resolve())
+        except ValueError:
+            raise APIError("无效的文件名", 400)
+        
         # 检查文件数量限制
         manifest = self.load_manifest(device_name)
         if len(manifest) >= self.max_files_per_device:
             raise APIError(f"设备文件数量超过限制: {self.max_files_per_device}", 400)
         
         # 保存文件
-        file_path = device_path / filename
         try:
+            file_path.parent.mkdir(parents=True, exist_ok=True)
             file_content.save(str(file_path))
         except Exception as e:
             logger.error(f"保存文件失败: {file_path}, 错误: {e}")
@@ -199,7 +206,7 @@ class SyncManager:
                 "timestamp": datetime.now().isoformat()
             }
     
-    def get_file_info(self, device_name: str, filename: str = None) -> Dict:
+    def get_file_info(self, device_name: str, filename: str = None, since: str = None) -> Dict:
         """获取文件信息"""
         if not self.validate_device_name(device_name):
             raise APIError("设备名不合法", 400)
@@ -209,6 +216,14 @@ class SyncManager:
             raise APIError(f"设备不存在: {device_name}", 404)
         
         manifest = self.load_manifest(device_name)
+        
+        # 解析 since 时间戳
+        since_time = None
+        if since:
+            try:
+                since_time = safe_parse_iso(since)
+            except (ValueError, TypeError):
+                raise APIError("无效的时间格式，请使用ISO格式", 400)
         
         if filename:
             # 获取单个文件信息
@@ -241,8 +256,17 @@ class SyncManager:
                         self.update_file_info(device_name, filename, file_path)
                         manifest = self.load_manifest(device_name)  # 重新加载
             
-            # 返回清单中的所有文件
+            # 返回清单中的所有文件（应用 since 过滤）
             for filename, info in manifest.items():
+                if since_time:
+                    modified = info.get("modified")
+                    if modified:
+                        try:
+                            mod_time = safe_parse_iso(modified)
+                            if mod_time < since_time:
+                                continue
+                        except (ValueError, TypeError):
+                            pass
                 file_info = info.copy()
                 file_info["name"] = filename
                 files.append(file_info)
@@ -323,6 +347,9 @@ class SyncManager:
         """创建设备的tar文件（写入TAR_CACHE目录）"""
         import uuid
         import tempfile
+
+        if not self.validate_device_name(device_name):
+            raise APIError("设备名不合法", 400)
 
         device_path = self.get_device_path(device_name)
         if not device_path.exists():

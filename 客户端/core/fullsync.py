@@ -15,12 +15,16 @@ def download_full_sync(config: ConfigManager, api: APIClient,
                        since: Optional[str] = None):
     logger.info("下载完整配置包...")
 
-    data = api.download_full_sync(exclude, since)
-
     config_dir = config.config_dir
     tar_path = config_dir / "full_sync.tar"
-    with open(tar_path, "wb") as f:
-        f.write(data)
+
+    params = {}
+    if exclude:
+        params["exclude"] = exclude
+    if since:
+        params["since"] = since
+
+    api._download_to_file("/api/full_sync/download", tar_path, params=params or None)
     logger.info(f"完整配置包已下载: {tar_path}")
 
     is_windows = config.platform == "windows"

@@ -199,13 +199,13 @@ def download_sync_tar(config: ConfigManager, api: APIClient,
     if not device:
         device = config.device_name
 
-    data = api.download_sync_tar(device, since)
-
     temp_dir = Path(tempfile.gettempdir())
     tar_path = temp_dir / f"sync_download_{device}_{int(time.time())}.tar"
 
-    with open(tar_path, "wb") as f:
-        f.write(data)
+    params = {}
+    if since:
+        params["since"] = since
+    api._download_to_file(f"/api/sync/get/{device}/tar", tar_path, params=params or None)
     logger.info(f"用户词库tar已下载: {tar_path}")
 
     sync_dir = config.config_dir / "sync" / device

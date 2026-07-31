@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class FullSyncManager:
     def __init__(self):
-        self.runtime_path = Path(config_manager.get("server", "paths.runtime"))
+        self.runtime_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.runtime")))
         
         # 默认排除的文件和目录
         self.default_excludes = [
@@ -124,7 +124,7 @@ class FullSyncManager:
                     # 时间筛选
                     if since:
                         file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                        since_time = datetime.fromisoformat(since.replace('Z', '+00:00'))
+                        since_time = safe_parse_iso(since)
                         if file_mtime < since_time:
                             continue
 
@@ -179,7 +179,7 @@ class FullSyncManager:
             # 备份现有runtime目录（必须成功才能继续）
             backup_path = None
             if overwrite:
-                backup_dir = Path(config_manager.get("server", "paths.backups"))
+                backup_dir = Path(config_manager.resolve_path(config_manager.get("server", "paths.backups")))
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 backup_path = backup_dir / f"runtime_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 try:

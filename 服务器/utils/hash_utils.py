@@ -30,8 +30,13 @@ def compute_bytes_hash(data: bytes) -> str:
 
 
 def safe_parse_iso(iso_str: str) -> datetime:
-    """安全解析 ISO 时间字符串，正确处理 Z 后缀和已有时区偏移"""
+    """安全解析 ISO 时间字符串，正确处理 Z 后缀和已有时区偏移。
+    始终返回 naive 本地时间，以便与 datetime.fromtimestamp() 的结果直接比较。"""
     s = iso_str.strip()
     if s.endswith('Z'):
         s = s[:-1] + '+00:00'
-    return datetime.fromisoformat(s)
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is not None:
+        # 转换为本地时间后去除时区信息
+        dt = dt.astimezone().replace(tzinfo=None)
+    return dt

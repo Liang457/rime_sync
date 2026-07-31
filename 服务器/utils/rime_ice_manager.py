@@ -34,7 +34,7 @@ def _run_git(args, cwd=None, timeout=GIT_TIMEOUT):
 
 
 def get_rime_ice_version():
-    version_file = Path(config_manager.get("server", "paths.rime_ice_original")) / "README.md"
+    version_file = Path(config_manager.resolve_path(config_manager.get("server", "paths.rime_ice_original"))) / "README.md"
     if version_file.exists():
         try:
             with open(version_file, 'r', encoding='utf-8') as f:
@@ -50,28 +50,29 @@ def get_rime_ice_version():
 
 
 def is_valid_git_repo(path):
-    """检查路径是否为有效的git仓库"""
+    """检查路径是否为有效的git仓库（使用 git 命令行）"""
     try:
-        import git
-        git.Repo(path)
-        return True
+        returncode, stdout, _ = _run_git(
+            ["rev-parse", "--is-inside-work-tree"], cwd=str(path), timeout=10
+        )
+        return returncode == 0 and stdout.strip() == "true"
     except Exception:
         return False
 
 
 def _get_head_commit(repo_path):
-    """获取仓库 HEAD commit hash（本地操作，使用 GitPython）"""
-    try:
-        import git
-        repo = git.Repo(repo_path)
-        return repo.head.commit.hexsha
-    except Exception as e:
-        logger.error(f"获取 HEAD commit 失败: {e}")
-        raise APIError(f"获取仓库信息失败: {str(e)}", 500)
+    """获取仓库 HEAD commit hash（使用 git 命令行）"""
+    returncode, stdout, stderr = _run_git(
+        ["rev-parse", "HEAD"], cwd=str(repo_path), timeout=10
+    )
+    if returncode != 0:
+        logger.error(f"获取 HEAD commit 失败: {stderr}")
+        raise APIError(f"获取仓库信息失败: {stderr[:200]}", 500)
+    return stdout.strip()
 
 
 def update_rime_ice_repo(force=False):
-    repo_path = Path(config_manager.get("server", "paths.rime_ice_original"))
+    repo_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.rime_ice_original")))
 
     # 如果目录不存在，或者存在但不是有效的git仓库，则克隆
     if not repo_path.exists() or not is_valid_git_repo(repo_path):
@@ -182,7 +183,7 @@ def update_rime_ice_repo(force=False):
 def clone_rime_ice_repo():
     repo_url = config_manager.get("server", "git.rime_ice_repo")
     branch = config_manager.get("server", "git.rime_ice_branch")
-    repo_path = Path(config_manager.get("server", "paths.rime_ice_original"))
+    repo_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.rime_ice_original")))
 
     # 如果目录已存在且是有效的git仓库，则返回已存在
     if repo_path.exists() and is_valid_git_repo(repo_path):
@@ -215,8 +216,8 @@ def clone_rime_ice_repo():
 
 
 def copy_to_runtime():
-    src_path = Path(config_manager.get("server", "paths.rime_ice_original"))
-    dst_path = Path(config_manager.get("server", "paths.runtime"))
+    src_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.rime_ice_original")))
+    dst_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.runtime")))
     backup_tmp = None
 
     if not src_path.exists():

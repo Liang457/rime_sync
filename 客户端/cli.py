@@ -283,6 +283,7 @@ def show_interactive_menu(config, api):
                                 dict_line = int(line_input)
                             except ValueError:
                                 print("无效行号，使用默认值18")
+                                dict_line = 18
 
                     success_count = 0
                     fail_count = 0

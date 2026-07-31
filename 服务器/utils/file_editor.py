@@ -20,7 +20,7 @@ def edit_file(file_path, line, content, action="insert"):
     返回:
         操作结果字典
     """
-    runtime_path = Path(config_manager.get("server", "paths.runtime"))
+    runtime_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.runtime")))
     target_path = (runtime_path / file_path).resolve()
     
     # 安全检查：确保目标路径在runtime目录内
@@ -58,6 +58,23 @@ def edit_file(file_path, line, content, action="insert"):
         lines.insert(line - 1, content + '\n')
         operation = "insert"
         line_added = line
+    elif action == "replace":
+        # 替换指定行
+        if line > len(lines):
+            logger.error(f"替换行号超出范围: {line}, 文件行数: {len(lines)}")
+            raise APIError(f"替换行号超出范围，有效范围: 1-{len(lines)}", 400)
+        lines[line - 1] = content + '\n'
+        operation = "replace"
+        line_added = line
+    elif action == "delete":
+        # 删除指定行
+        if line > len(lines):
+            logger.error(f"删除行号超出范围: {line}, 文件行数: {len(lines)}")
+            raise APIError(f"删除行号超出范围，有效范围: 1-{len(lines)}", 400)
+        deleted_content = lines[line - 1].rstrip('\n')
+        del lines[line - 1]
+        operation = "delete"
+        line_added = line
     else:
         logger.error(f"不支持的操作类型: {action}")
         raise APIError(f"不支持的操作类型: {action}", 400)
@@ -83,7 +100,7 @@ def edit_file(file_path, line, content, action="insert"):
 
 def validate_file_path(file_path):
     """验证文件路径是否合法"""
-    runtime_path = Path(config_manager.get("server", "paths.runtime"))
+    runtime_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.runtime")))
     target_path = (runtime_path / file_path).resolve()
     
     # 安全检查

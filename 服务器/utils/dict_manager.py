@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 class DictManager:
     def __init__(self):
-        self.cn_dicts_path = Path(config_manager.get("dict", "dict.cn_dicts_path"))
-        self.en_dicts_path = Path(config_manager.get("dict", "dict.en_dicts_path"))
+        self.cn_dicts_path = Path(config_manager.resolve_path(config_manager.get("dict", "dict.cn_dicts_path")))
+        self.en_dicts_path = Path(config_manager.resolve_path(config_manager.get("dict", "dict.en_dicts_path")))
         self.allowed_extensions = config_manager.get("dict", "dict.allowed_extensions", [".dict.yaml", ".txt"])
         
         # 确保目录存在

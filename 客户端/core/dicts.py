@@ -111,12 +111,13 @@ def sync_dicts(config: ConfigManager, api: APIClient,
 
     logger.info(f"类别 '{state_key}': {len(changed_files)}/{len(server_files)} 个文件需要更新")
 
-    data_bytes = api.download_full_sync(since=since)
-
     config_dir = config.config_dir
     tar_path = config_dir / "runtime_sync.tar"
-    with open(tar_path, "wb") as f:
-        f.write(data_bytes)
+
+    params = {}
+    if since:
+        params["since"] = since
+    api._download_to_file("/api/full_sync/download", tar_path, params=params or None)
     logger.info(f"配置tar已下载: {tar_path}")
 
     extracted = extract_tar(tar_path, config_dir)
@@ -133,12 +134,15 @@ def download_dict_tar(config: ConfigManager, api: APIClient,
                       since: Optional[str] = None):
     logger.info("下载词库tar包...")
 
-    data = api.download_dict_tar(category, since)
-
     config_dir = config.config_dir
     tar_path = config_dir / "dicts_update.tar"
-    with open(tar_path, "wb") as f:
-        f.write(data)
+
+    params = {}
+    if category:
+        params["category"] = category
+    if since:
+        params["since"] = since
+    api._download_to_file("/api/dict/get/tar", tar_path, params=params or None)
     logger.info(f"词库tar已下载: {tar_path}")
 
     extracted_files = extract_tar(tar_path, config_dir)

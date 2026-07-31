@@ -27,7 +27,11 @@ def compute_bytes_hash(data: bytes) -> str:
 
 
 def safe_parse_iso(iso_str: str) -> datetime:
+    """安全解析 ISO 时间字符串，始终返回 naive 本地时间。"""
     s = iso_str.strip()
     if s.endswith('Z'):
         s = s[:-1] + '+00:00'
-    return datetime.fromisoformat(s)
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone().replace(tzinfo=None)
+    return dt

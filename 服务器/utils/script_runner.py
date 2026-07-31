@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 class ScriptRunner:
     def __init__(self):
-        self.makedict_path = Path(config_manager.get("server", "paths.makedict"))
-        self.runtime_cn_dicts = Path(config_manager.get("dict", "dict.cn_dicts_path"))
+        self.makedict_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.makedict")))
+        self.runtime_cn_dicts = Path(config_manager.resolve_path(config_manager.get("dict", "dict.cn_dicts_path")))
         self.max_execution_time = config_manager.get("script", "scripts.max_execution_time", 300)
         self.max_memory_mb = config_manager.get("script", "scripts.max_memory_mb", 512)
         self.allow_network = config_manager.get("script", "scripts.allow_network_access", True)
@@ -55,10 +55,10 @@ class ScriptRunner:
             raise APIError(f"脚本 '{script_name}' 缺少主文件 main.py", 404)
         
         # 权限检查：只有信任的设备可以执行脚本
-        if device and self.trusted_users:
-            if device not in self.trusted_users:
-                logger.warning(f"设备 {device} 不在信任列表中，拒绝执行脚本")
-                raise APIError(f"设备 {device} 没有执行脚本的权限", 403)
+        if self.trusted_users:
+            if not device or device not in self.trusted_users:
+                logger.warning(f"设备 {device or '(未提供)'} 不在信任列表中，拒绝执行脚本")
+                raise APIError(f"设备没有执行脚本的权限，需要提供有效的 device 标识", 403)
         
         # 创建临时工作目录
         with tempfile.TemporaryDirectory(prefix=f"rime_makedict_{script_name}_") as temp_dir:

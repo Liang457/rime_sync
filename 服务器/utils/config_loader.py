@@ -8,6 +8,8 @@ from pathlib import Path
 class ConfigManager:
     def __init__(self, config_dir="config"):
         self.config_dir = Path(config_dir)
+        # 服务器根目录（config_dir 的父目录），用于解析相对路径
+        self.base_dir = self.config_dir.resolve().parent
         self.configs = {}
         self.logger = logging.getLogger(__name__)
         self.load_all_configs()
@@ -46,7 +48,7 @@ class ConfigManager:
                     "backups": "backups/"
                 },
                 "git": {
-                    "rime_ice_repo": "https://github.com/MarkLux/rime-ice.git",
+                    "rime_ice_repo": "https://github.com/iDvel/rime-ice.git",
                     "rime_ice_branch": "main",
                     "update_check_interval": 3600
                 },
@@ -123,6 +125,13 @@ class ConfigManager:
                 return default
         
         return value
+
+    def resolve_path(self, path_str: str) -> str:
+        """将相对路径解析为基于服务器根目录的绝对路径"""
+        p = Path(path_str)
+        if p.is_absolute():
+            return str(p)
+        return str(self.base_dir / p)
 
     def update(self, config_name, data):
         if config_name in self.configs:

@@ -55,7 +55,7 @@ def handle_config_upload(request):
         logger.warning(f"检查设备类型失败: {e}，继续上传")
     
     # 确定保存路径
-    runtime_path = Path(config_manager.get("server", "paths.runtime"))
+    runtime_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.runtime")))
     save_path = runtime_path / filename
     
     # 安全检查：确保保存路径在runtime目录内
@@ -64,7 +64,8 @@ def handle_config_upload(request):
         return error_response("无效的文件名", 400)
     
     # 检查文件是否已存在
-    if save_path.exists() and not overwrite:
+    file_existed = save_path.exists()
+    if file_existed and not overwrite:
         return error_response("文件已存在，使用 overwrite=true 覆盖", 409)
     
     # 确保目录存在
@@ -87,7 +88,7 @@ def handle_config_upload(request):
             "size": file_size,
             "saved_path": str(save_path.relative_to(runtime_path)),
             "device": device,
-            "overwritten": overwrite and save_path.exists()
+            "overwritten": file_existed
         }, "配置文件上传成功")
         
     except Exception as e:
