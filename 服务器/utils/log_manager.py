@@ -10,7 +10,6 @@ import shutil
 import subprocess
 import sys
 import tarfile
-import tempfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
@@ -125,8 +124,8 @@ class LogManager:
         2. tar.gz     →  logs_<ts>.tar.gz
         3. tar        →  logs_<ts>.tar
         """
-        # 先用 tarfile 打包
-        tar_path = Path(tempfile.gettempdir()) / f"rime_logs_{timestamp}.tar"
+        # 先用 tarfile 打包（直接写入归档目录，避免 /tmp 中转文件被系统清理）
+        tar_path = self.archive_dir / f"logs_{timestamp}.tar"
         try:
             with tarfile.open(tar_path, "w") as tar:
                 for f in file_list:
@@ -153,10 +152,8 @@ class LogManager:
                     archive_path.unlink(missing_ok=True)
                 continue
 
-        # 最终回退：无压缩 tar
-        final_path = self.archive_dir / f"logs_{timestamp}.tar"
-        shutil.move(str(tar_path), str(final_path))
-        return final_path
+        # 最终回退：无压缩 tar（已在归档目录，无需移动）
+        return tar_path
 
     @staticmethod
     def _compress_7z(tar_path: Path, archive_path: Path) -> None:

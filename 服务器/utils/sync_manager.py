@@ -344,9 +344,10 @@ class SyncManager:
         return file_path
     
     def create_tar(self, device_name: str, since: str = None) -> Path:
-        """创建设备的tar文件（写入TAR_CACHE目录）"""
+        """创建设备的tar文件（直接写入tar缓存目录）"""
         import uuid
-        import tempfile
+
+        from utils.tar_cache import get_tar_cache_dir
 
         if not self.validate_device_name(device_name):
             raise APIError("设备名不合法", 400)
@@ -355,12 +356,11 @@ class SyncManager:
         if not device_path.exists():
             raise APIError(f"设备不存在: {device_name}", 404)
 
-        # 创建临时tar文件（写入系统临时目录，后续由路由层移到TAR_CACHE）
-        temp_tar = tempfile.NamedTemporaryFile(suffix='.tar', delete=False)
-        temp_tar.close()
+        # 直接在缓存目录生成tar文件（每次确认目录存在，避免被系统清理后报错）
+        tar_path = get_tar_cache_dir() / f"sync_{device_name}_{uuid.uuid4().hex[:8]}.tar"
 
         try:
-            with tarfile.open(temp_tar.name, 'w') as tarf:
+            with tarfile.open(tar_path, 'w') as tarf:
                 for file_path in device_path.rglob('*'):
                     if file_path.is_file() and file_path.name != self.manifest_filename:
                         rel_path = file_path.relative_to(device_path)
@@ -375,11 +375,11 @@ class SyncManager:
                         # 添加到tar
                         tarf.add(file_path, arcname=str(rel_path))
 
-            return Path(temp_tar.name)
+            return tar_path
         except Exception as e:
             # 清理临时文件
-            if Path(temp_tar.name).exists():
-                Path(temp_tar.name).unlink()
+            if tar_path.exists():
+                tar_path.unlink()
             raise APIError(f"创建tar文件失败: {str(e)}", 500)
 
 sync_manager = SyncManager()

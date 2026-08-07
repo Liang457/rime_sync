@@ -1,5 +1,3 @@
-import os
-import json
 import logging
 import tarfile
 import shutil
@@ -104,15 +102,18 @@ class FullSyncManager:
     
     def create_tar(self, exclude_patterns: Set[str] = None, since: str = None) -> Path:
         """创建完整配置包的tar文件"""
+        import uuid
+
+        from utils.tar_cache import get_tar_cache_dir
+
         if exclude_patterns is None:
             exclude_patterns = self.get_exclude_patterns()
 
-        # 创建临时tar文件
-        temp_tar = tempfile.NamedTemporaryFile(suffix='.tar', delete=False)
-        temp_tar.close()
+        # 直接在缓存目录生成tar文件（每次确认目录存在，避免被系统清理后报错）
+        tar_path = get_tar_cache_dir() / f"fullsync_{uuid.uuid4().hex[:8]}.tar"
 
         try:
-            with tarfile.open(temp_tar.name, 'w') as tarf:
+            with tarfile.open(tar_path, 'w') as tarf:
                 for file_path in self.runtime_path.rglob('*'):
                     if not file_path.is_file():
                         continue
@@ -131,14 +132,14 @@ class FullSyncManager:
                     rel_path = file_path.relative_to(self.runtime_path)
                     tarf.add(str(file_path), arcname=str(rel_path))
 
-            logger.info(f"完整配置包tar创建成功: {temp_tar.name}")
-            return Path(temp_tar.name)
+            logger.info(f"完整配置包tar创建成功: {tar_path}")
+            return tar_path
 
         except Exception as e:
             logger.error(f"创建tar文件失败: {e}")
             # 清理临时文件
-            if os.path.exists(temp_tar.name):
-                os.unlink(temp_tar.name)
+            if tar_path.exists():
+                tar_path.unlink()
             raise APIError(f"创建tar文件失败: {str(e)}", 500)
 
     def upload_tar(self, tar_content, overwrite: bool = False, hash_value: str = None) -> Dict:

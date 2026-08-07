@@ -1,8 +1,5 @@
-import os
-import json
 import logging
 import tarfile
-import tempfile
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
@@ -151,8 +148,12 @@ class DictManager:
             since: 时间戳，只包含此时间之后有变动的文件
 
         返回:
-            临时tar文件路径
+            tar文件路径（位于tar缓存目录）
         """
+        import uuid
+
+        from utils.tar_cache import get_tar_cache_dir
+
         # 确定要包含的目录
         categories = []
         if category is None:
@@ -171,12 +172,11 @@ class DictManager:
             except ValueError:
                 raise APIError("无效的时间格式，请使用ISO格式", 400)
 
-        # 创建临时tar文件
-        temp_tar = tempfile.NamedTemporaryFile(suffix='.tar', delete=False)
-        temp_tar.close()
+        # 直接在缓存目录生成tar文件（每次确认目录存在，避免被系统清理后报错）
+        tar_path = get_tar_cache_dir() / f"dict_{category or 'all'}_{uuid.uuid4().hex[:8]}.tar"
 
         try:
-            with tarfile.open(temp_tar.name, 'w') as tarf:
+            with tarfile.open(tar_path, 'w') as tarf:
                 for dir_name, dir_path in categories:
                     if not dir_path.exists():
                         continue
@@ -199,11 +199,11 @@ class DictManager:
 
                             tarf.add(file_path, arcname=arcname)
 
-            return Path(temp_tar.name)
+            return tar_path
         except Exception as e:
             # 清理临时文件
-            if Path(temp_tar.name).exists():
-                Path(temp_tar.name).unlink()
+            if tar_path.exists():
+                tar_path.unlink()
             raise APIError(f"创建tar文件失败: {str(e)}", 500)
     
     def _calculate_hash(self, filepath: Path) -> str:

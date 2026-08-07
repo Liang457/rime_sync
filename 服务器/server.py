@@ -9,8 +9,6 @@ import sys
 import logging
 import shutil
 import atexit
-import uuid
-import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -25,23 +23,18 @@ logging.basicConfig(
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 
-# 临时 tar 文件缓存目录，避免 send_file 流式传输时的竞态删除问题
-TAR_CACHE = Path(tempfile.gettempdir()) / "rime_server_tar_cache"
-TAR_CACHE.mkdir(parents=True, exist_ok=True)
+from utils.tar_cache import (
+    get_tar_cache_dir, cleanup_stale_files, cleanup_tar_cache
+)
+
+# 临时 tar 文件缓存目录，避免 send_file 流式传输时的竞态删除问题。
+# 目录在系统临时目录下（如 /tmp），可能被系统随时清理，
+# 因此不缓存模块级 Path，统一通过 get_tar_cache_dir() 每次获取并确认存在。
 
 # 启动时清理上次残留的临时文件
-for _stale in TAR_CACHE.iterdir():
-    try:
-        _stale.unlink()
-    except OSError:
-        pass
+cleanup_stale_files()
 
-def _cleanup_tar_cache():
-    """进程退出时清理缓存目录"""
-    if TAR_CACHE.exists():
-        shutil.rmtree(TAR_CACHE, ignore_errors=True)
-
-atexit.register(_cleanup_tar_cache)
+atexit.register(cleanup_tar_cache)
 
 from utils.config_loader import config_manager
 from utils.error_handler import (
@@ -338,13 +331,9 @@ def create_app():
 
         try:
             tar_path = sync_manager.create_tar(device, since)
-            cache_name = f"sync_{device}_{uuid.uuid4().hex[:8]}.tar"
-            cache_path = TAR_CACHE / cache_name
-            shutil.move(str(tar_path), str(cache_path))
-            tar_path = cache_path
 
             response = send_file(
-                str(cache_path),
+                str(tar_path),
                 as_attachment=True,
                 download_name=f"{device}_sync.tar",
                 mimetype='application/x-tar'
@@ -352,8 +341,8 @@ def create_app():
             @response.call_on_close
             def cleanup():
                 try:
-                    if cache_path.exists():
-                        cache_path.unlink()
+                    if tar_path.exists():
+                        tar_path.unlink()
                 except Exception:
                     pass
             return response
@@ -414,13 +403,9 @@ def create_app():
 
         try:
             tar_path = dict_manager.create_tar(category, since)
-            cache_name = f"dict_{category or 'all'}_{uuid.uuid4().hex[:8]}.tar"
-            cache_path = TAR_CACHE / cache_name
-            shutil.move(str(tar_path), str(cache_path))
-            tar_path = cache_path
 
             response = send_file(
-                str(cache_path),
+                str(tar_path),
                 as_attachment=True,
                 download_name=f"rime_dicts_{category or 'all'}.tar",
                 mimetype='application/x-tar'
@@ -428,8 +413,8 @@ def create_app():
             @response.call_on_close
             def cleanup():
                 try:
-                    if cache_path.exists():
-                        cache_path.unlink()
+                    if tar_path.exists():
+                        tar_path.unlink()
                 except Exception:
                     pass
             return response
@@ -488,13 +473,9 @@ def create_app():
                 exclude_patterns=full_sync_manager.get_exclude_patterns(exclude) if exclude else None,
                 since=since
             )
-            cache_name = f"fullsync_{uuid.uuid4().hex[:8]}.tar"
-            cache_path = TAR_CACHE / cache_name
-            shutil.move(str(tar_path), str(cache_path))
-            tar_path = cache_path
 
             response = send_file(
-                str(cache_path),
+                str(tar_path),
                 as_attachment=True,
                 download_name="rime_full_config.tar",
                 mimetype='application/x-tar'
@@ -502,8 +483,8 @@ def create_app():
             @response.call_on_close
             def cleanup():
                 try:
-                    if cache_path.exists():
-                        cache_path.unlink()
+                    if tar_path.exists():
+                        tar_path.unlink()
                 except Exception:
                     pass
             return response

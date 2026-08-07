@@ -34,6 +34,7 @@ logs/
 .claude/
 AGENTS.md
 CLAUDE.md
+.qoder/
 
 # OS
 Thumbs.db
