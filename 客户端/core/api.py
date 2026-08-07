@@ -107,7 +107,7 @@ class APIClient:
     def run_script(self, script_name: str, version: str,
                    extra_params: Optional[Dict] = None) -> Dict[str, Any]:
         logger.info(f"运行词库生成脚本: {script_name}")
-        data = {"version": version}
+        data = {"version": version, "device": self.config.device_name}
         if extra_params:
             data["extra_params"] = extra_params
         return self._request_json("POST", f"/api/makedict/run/{script_name}", json=data)
