@@ -6,8 +6,9 @@ from typing import Optional, Dict, List
 
 from core.config import ConfigManager
 from core.api import APIClient
-from core.tar_utils import extract_tar
+from core.tar_utils import extract_tar, safe_join
 from core.hash_utils import compute_file_hash
+from core.errors import APIError
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +125,9 @@ def sync_dicts(config: ConfigManager, api: APIClient,
     logger.info(f"解压完成: {len(extracted)} 个文件")
 
     tar_path.unlink(missing_ok=True)
-    state.set_last_sync(state_key, datetime.now().isoformat())
+    # 使用服务器时钟（响应中的 timestamp）作为下次 since，避免客户端时钟偏移导致漏同步
+    server_ts = data.get("timestamp")
+    state.set_last_sync(state_key, server_ts or datetime.now().isoformat())
 
     return {"files": len(server_files), "changed": len(changed_files), "extracted": len(extracted)}
 
@@ -167,7 +170,11 @@ def download_dict_file(config: ConfigManager, api: APIClient,
         target_dir = config_dir
 
     target_dir.mkdir(parents=True, exist_ok=True)
-    local_path = target_dir / filename
+    try:
+        local_path = safe_join(target_dir, filename)
+    except ValueError as e:
+        logger.warning(f"拒绝保存非法文件名: {e}")
+        raise APIError(f"非法文件名: {filename}") from e
 
     with open(local_path, "wb") as f:
         f.write(data)

@@ -5,10 +5,12 @@ rime-server 主程序
 """
 
 import os
+import re
 import sys
 import logging
 import shutil
 import atexit
+import secrets
 from datetime import datetime
 from pathlib import Path
 
@@ -51,7 +53,7 @@ def setup_logging():
     log_max_bytes = config_manager.get("server", "server.log_max_bytes", 10 * 1024 * 1024)
     log_backup_count = config_manager.get("server", "server.log_backup_count", 5)
 
-    log_dir = Path(log_file).parent
+    log_dir = Path(config_manager.resolve_path(log_file)).parent
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # 归档非当天的旧日志（在创建新 handler 之前）
@@ -73,7 +75,7 @@ def setup_logging():
     )
 
     fh = RotatingFileHandler(
-        str(Path(log_file).resolve()),
+        str(Path(config_manager.resolve_path(log_file))),
         maxBytes=log_max_bytes,
         backupCount=log_backup_count,
         encoding='utf-8'
@@ -106,7 +108,21 @@ def create_app():
     @app.before_request
     def log_request():
         if request.path != '/api/health':
-            logger.info(f"{request.method} {request.path} - {request.remote_addr}")
+            path = re.sub(r'[\x00-\x1f\x7f]', '?', request.path)
+            addr = re.sub(r'[\x00-\x1f\x7f]', '?', request.remote_addr or '-')
+            logger.info(f"{request.method} {path} - {addr}")
+
+    @app.before_request
+    def authenticate():
+        # api_token 为空时保持旧行为（无认证）；配置后所有 /api/* 请求必须携带
+        if not request.path.startswith('/api/'):
+            return None
+        expected = config_manager.get("server", "server.api_token", "")
+        if not expected:
+            return None
+        provided = request.headers.get("X-Api-Token", "")
+        if not secrets.compare_digest(provided, expected):
+            return error_response("未授权: X-Api-Token 请求头缺失或不正确", 401)
     
     @app.after_request
     def log_response(response):

@@ -1,4 +1,5 @@
 from flask import jsonify
+from werkzeug.exceptions import RequestEntityTooLarge
 import traceback
 import logging
 
@@ -41,4 +42,6 @@ def register_error_handlers(app):
     app.register_error_handler(APIError, handle_api_error)
     app.register_error_handler(404, lambda e: error_response("资源不存在", 404))
     app.register_error_handler(405, lambda e: error_response("方法不允许", 405))
+    app.register_error_handler(413, lambda e: error_response("上传文件超过大小限制", 413))
+    app.register_error_handler(RequestEntityTooLarge, lambda e: error_response("上传文件超过大小限制", 413))
     app.register_error_handler(500, lambda e: error_response("服务器内部错误", 500))

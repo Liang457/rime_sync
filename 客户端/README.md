@@ -23,7 +23,7 @@
 
 ## 安装要求
 
-- Python 3.9+
+- Python 3.12+（tar 解压依赖 `filter='data'`）
 - 依赖库：`requests`、`pyyaml`
 
 安装依赖：
@@ -64,7 +64,8 @@ python cli.py
     "url": "http://192.168.1.100:10032",
     "timeout": 30,
     "retry_count": 3,
-    "verify_ssl": false
+    "verify_ssl": false,
+    "api_token": ""
   },
   "rime": {
     "config_dir": "C:\\Users\\Username\\AppData\\Roaming\\Rime",
@@ -94,6 +95,7 @@ python cli.py
 ```
 
 > **提示**：`device_name` 留空时会自动从 `installation.yaml` 中读取 `installation_id`。
+> **API 认证**：若服务器配置了 `api_token`，客户端 `server.api_token` 需填写相同值；旧配置文件缺少该选项时会自动补充 `""` 并保存。
 
 ---
 

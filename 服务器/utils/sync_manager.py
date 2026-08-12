@@ -4,6 +4,7 @@ import logging
 import tarfile
 import shutil
 import errno
+import threading
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
@@ -20,6 +21,8 @@ class SyncManager:
         self.manifest_filename = config_manager.get("sync", "sync.manifest_file", "_manifest.json")
         self.max_files_per_device = config_manager.get("sync", "sync.max_files_per_device", 100)
         self.max_total_size_mb = config_manager.get("sync", "sync.max_total_size_mb", 1024)
+        # 保护 manifest 读-改-写，避免多线程并发上传互相覆盖
+        self._manifest_lock = threading.Lock()
         
         # 确保基础目录存在
         self.sync_base.mkdir(parents=True, exist_ok=True)
@@ -77,17 +80,18 @@ class SyncManager:
     
     def update_file_info(self, device_name: str, filename: str, filepath: Path):
         """更新文件信息到清单"""
-        manifest = self.load_manifest(device_name)
-        
-        file_info = {
-            "hash": self.calculate_hash(filepath),
-            "size": filepath.stat().st_size,
-            "modified": datetime.now().isoformat(),
-            "type": "file"
-        }
-        
-        manifest[filename] = file_info
-        self.save_manifest(device_name, manifest)
+        with self._manifest_lock:
+            manifest = self.load_manifest(device_name)
+            
+            file_info = {
+                "hash": self.calculate_hash(filepath),
+                "size": filepath.stat().st_size,
+                "modified": datetime.now().isoformat(),
+                "type": "file"
+            }
+            
+            manifest[filename] = file_info
+            self.save_manifest(device_name, manifest)
         
         return file_info
     
@@ -155,6 +159,21 @@ class SyncManager:
                 with open(tar_path, 'wb') as f:
                     f.write(tar_content.read())
 
+            # 解压前预检：限制解压后总大小（防tar炸弹）和文件数量
+            try:
+                with tarfile.open(tar_path, 'r') as tar_ref:
+                    file_members = [m for m in tar_ref.getmembers() if m.isfile()]
+                    total_size = sum(m.size for m in file_members)
+                if total_size > self.max_total_size_mb * 1024 * 1024:
+                    raise APIError(f"tar解压后总大小超过限制({self.max_total_size_mb}MB)", 400)
+                if len(file_members) > self.max_files_per_device:
+                    raise APIError(f"tar内文件数量超过限制({self.max_files_per_device})", 400)
+            except APIError:
+                raise
+            except Exception as e:
+                logger.error(f"tar预检失败: {e}")
+                raise APIError(f"解压tar文件失败: {str(e)}", 400)
+
             # 解压tar文件
             try:
                 with tarfile.open(tar_path, 'r') as tar_ref:
@@ -165,36 +184,47 @@ class SyncManager:
 
             # 处理解压的文件
             uploaded_files = []
-            for extracted_file in temp_path.rglob('*'):
-                if extracted_file.is_file() and extracted_file != tar_path:
-                    # 计算相对路径
-                    rel_path = extracted_file.relative_to(temp_path)
-                    filename = str(rel_path).replace('\\', '/')  # 统一使用正斜杠
+            with self._manifest_lock:
+                manifest = self.load_manifest(device_name)
+                for extracted_file in temp_path.rglob('*'):
+                    if extracted_file.is_file() and extracted_file != tar_path:
+                        # 计算相对路径
+                        rel_path = extracted_file.relative_to(temp_path)
+                        filename = str(rel_path).replace('\\', '/')  # 统一使用正斜杠
 
-                    # 移动文件到设备目录（处理跨设备移动）
-                    target_path = device_path / rel_path
-                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                        # 移动文件到设备目录（处理跨设备移动）
+                        target_path = device_path / rel_path
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
 
-                    try:
-                        # 首先尝试使用shutil.move（如果同设备会更快）
-                        shutil.move(str(extracted_file), str(target_path))
-                    except OSError as e:
-                        # 跨设备 move 失败时，退化为 copy + delete
-                        # errno.EXDEV 是 Linux 跨设备错误, winerror 17 是 Windows 等价
-                        if e.errno == errno.EXDEV or getattr(e, 'winerror', None) == 17:
-                            logger.debug(f"跨设备移动，使用复制+删除: {extracted_file} -> {target_path}")
-                            shutil.copy2(str(extracted_file), str(target_path))
-                            extracted_file.unlink()
-                        else:
-                            raise
+                        try:
+                            # 首先尝试使用shutil.move（如果同设备会更快）
+                            shutil.move(str(extracted_file), str(target_path))
+                        except OSError as e:
+                            # 跨设备 move 失败时，退化为 copy + delete
+                            # errno.EXDEV 是 Linux 跨设备错误, winerror 17 是 Windows 等价
+                            if e.errno == errno.EXDEV or getattr(e, 'winerror', None) == 17:
+                                logger.debug(f"跨设备移动，使用复制+删除: {extracted_file} -> {target_path}")
+                                shutil.copy2(str(extracted_file), str(target_path))
+                                extracted_file.unlink()
+                            else:
+                                raise
 
-                    # 更新清单
-                    file_info = self.update_file_info(device_name, filename, target_path)
-                    uploaded_files.append({
-                        "name": filename,
-                        "size": file_info["size"],
-                        "hash": file_info["hash"]
-                    })
+                        # 更新清单（收集到内存，最后一次性写入）
+                        file_info = {
+                            "hash": self.calculate_hash(target_path),
+                            "size": target_path.stat().st_size,
+                            "modified": datetime.now().isoformat(),
+                            "type": "file"
+                        }
+                        manifest[filename] = file_info
+                        uploaded_files.append({
+                            "name": filename,
+                            "size": file_info["size"],
+                            "hash": file_info["hash"]
+                        })
+
+                # 所有文件处理完毕后一次性保存清单
+                self.save_manifest(device_name, manifest)
 
             logger.info(f"tar上传成功: 设备={device_name}, 文件数={len(uploaded_files)}")
 

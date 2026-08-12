@@ -6,7 +6,11 @@
 """
 
 import tempfile
+import time
 from pathlib import Path
+
+# 只清理超过该秒数的残留文件，避免误删其他实例/请求正在传输的 tar
+STALE_SECONDS = 3600
 
 
 def get_tar_cache_dir() -> Path:
@@ -16,12 +20,13 @@ def get_tar_cache_dir() -> Path:
     return cache_dir
 
 
-def cleanup_stale_files() -> int:
-    """删除缓存目录内的残留文件，返回删除数量。目录不存在时视为已清理。"""
-    cache_dir = get_tar_cache_dir()
+def _remove_stale(cache_dir: Path, threshold: int) -> int:
     removed = 0
+    now = time.time()
     for stale in cache_dir.iterdir():
         try:
+            if now - stale.stat().st_mtime < threshold:
+                continue
             stale.unlink()
             removed += 1
         except OSError:
@@ -29,14 +34,15 @@ def cleanup_stale_files() -> int:
     return removed
 
 
+def cleanup_stale_files() -> int:
+    """删除缓存目录内的陈旧残留文件，返回删除数量。目录不存在时视为已清理。"""
+    return _remove_stale(get_tar_cache_dir(), STALE_SECONDS)
+
+
 def cleanup_tar_cache() -> None:
-    """进程退出时清理缓存文件，保留目录本身。"""
+    """进程退出时清理陈旧的缓存文件，保留目录本身。"""
     try:
         cache_dir = get_tar_cache_dir()
     except OSError:
         return
-    for stale in cache_dir.iterdir():
-        try:
-            stale.unlink()
-        except OSError:
-            pass
+    _remove_stale(cache_dir, STALE_SECONDS)

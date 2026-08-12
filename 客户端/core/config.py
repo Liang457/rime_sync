@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 from pathlib import Path
@@ -30,6 +31,7 @@ class ConfigManager:
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
+            raw_config = copy.deepcopy(config)
             config = self._migrate(config)
             self._apply_defaults(config)
 
@@ -37,6 +39,10 @@ class ConfigManager:
                 config["sync"]["device_name"] = self._read_device_from_installation(config)
 
             self.config = config
+            # 旧配置文件缺少新增选项时自动补充并写回，保证向后兼容
+            if self.config != raw_config:
+                logger.info("配置文件缺少选项，已自动补充默认值并保存")
+                self.save()
         except json.JSONDecodeError as e:
             raise ConfigError(f"配置文件格式错误: {e}")
         except ConfigError:
@@ -86,6 +92,7 @@ class ConfigManager:
         config.setdefault("server", {}).setdefault("timeout", 30)
         config.setdefault("server", {}).setdefault("retry_count", 3)
         config.setdefault("server", {}).setdefault("verify_ssl", False)
+        config.setdefault("server", {}).setdefault("api_token", "")
 
         config.setdefault("rime", {}).setdefault("config_dir", ".")
         config.setdefault("rime", {}).setdefault("platform", "windows")
@@ -108,7 +115,8 @@ class ConfigManager:
                 "url": "http://localhost:10032",
                 "timeout": 30,
                 "retry_count": 3,
-                "verify_ssl": False
+                "verify_ssl": False,
+                "api_token": ""
             },
             "rime": {
                 "config_dir": ".",
@@ -209,6 +217,10 @@ class ConfigManager:
     @property
     def verify_ssl(self) -> bool:
         return self.config["server"].get("verify_ssl", False)
+
+    @property
+    def api_token(self) -> str:
+        return self.config["server"].get("api_token", "")
 
     @property
     def rime_config_dir(self) -> str:

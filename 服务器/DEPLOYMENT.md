@@ -2,7 +2,7 @@
 
 ## 快速启动
 
-1. 确保已安装Python 3.7+和git
+1. 确保已安装Python 3.12+和git（tar 解压依赖 `filter='data'`，需 3.12+）
 2. 进入项目目录: `cd /home/gk-pi/rime_server`
 3. 设置虚拟环境并安装依赖:
    ```
@@ -61,6 +61,15 @@
 3. `config/dict.json` - 词库管理配置
 4. `config/script.json` - 脚本执行配置
 5. `config/devices.json` - 设备信息配置
+
+### API 认证（api_token）
+
+`config/server.json` 中的 `server.api_token` 控制 API 访问认证：
+
+- 为空（默认）：不启用认证，所有请求放行（旧行为）
+- 非空：所有 `/api/*` 请求必须携带请求头 `X-Api-Token: <token>`，否则返回 401
+
+客户端在 `client_config.json` 的 `server.api_token` 中配置相同值。首次启动后若配置文件中缺少该选项，服务器会自动补充 `"api_token": ""` 并保存。
 
 ## API文档
 

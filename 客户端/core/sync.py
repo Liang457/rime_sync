@@ -8,7 +8,7 @@ from typing import Optional, Dict, List, Tuple
 
 from core.config import ConfigManager
 from core.api import APIClient
-from core.tar_utils import extract_tar
+from core.tar_utils import extract_tar, safe_join
 from core.errors import APIError
 from core.hash_utils import compute_file_hash, safe_parse_iso
 
@@ -226,7 +226,11 @@ def download_sync_file(config: ConfigManager, api: APIClient,
     data = api.download_sync_file(filename, device)
 
     sync_dir = config.config_dir / "sync" / device
-    local_path = sync_dir / filename
+    try:
+        local_path = safe_join(sync_dir, filename)
+    except ValueError as e:
+        logger.warning(f"拒绝保存非法文件名 {device}/{filename}: {e}")
+        raise APIError(f"服务端返回非法文件名: {filename}") from e
     local_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(local_path, "wb") as f:

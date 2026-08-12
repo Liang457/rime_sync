@@ -64,7 +64,15 @@ class FullSyncManager:
         
         files = []
         total_size = 0
-        
+
+        # since 时间戳提前解析一次（避免循环内重复解析），无效格式返回 400
+        since_time = None
+        if since:
+            try:
+                since_time = safe_parse_iso(since)
+            except (ValueError, TypeError):
+                raise APIError("无效的时间格式，请使用ISO格式", 400)
+
         # 递归遍历runtime目录
         for file_path in self.runtime_path.rglob('*'):
             if not file_path.is_file():
@@ -75,9 +83,8 @@ class FullSyncManager:
                 continue
             
             # 时间筛选
-            if since:
+            if since_time:
                 file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                since_time = safe_parse_iso(since)
                 if file_mtime < since_time:
                     continue
             
@@ -109,6 +116,14 @@ class FullSyncManager:
         if exclude_patterns is None:
             exclude_patterns = self.get_exclude_patterns()
 
+        # since 时间戳提前解析一次，无效格式返回 400
+        since_time = None
+        if since:
+            try:
+                since_time = safe_parse_iso(since)
+            except (ValueError, TypeError):
+                raise APIError("无效的时间格式，请使用ISO格式", 400)
+
         # 直接在缓存目录生成tar文件（每次确认目录存在，避免被系统清理后报错）
         tar_path = get_tar_cache_dir() / f"fullsync_{uuid.uuid4().hex[:8]}.tar"
 
@@ -123,9 +138,8 @@ class FullSyncManager:
                         continue
 
                     # 时间筛选
-                    if since:
+                    if since_time:
                         file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                        since_time = safe_parse_iso(since)
                         if file_mtime < since_time:
                             continue
 
@@ -170,10 +184,15 @@ class FullSyncManager:
                         400
                     )
 
-            # 验证tar文件
+            # 验证tar文件并检查解压后总大小
             try:
                 with tarfile.open(tar_path, 'r') as tf:
-                    pass  # 只验证格式，不提取内容
+                    total_size = sum(m.size for m in tf.getmembers() if m.isfile())
+                max_bytes = config_manager.get("sync", "sync.max_total_size_mb", 1024) * 1024 * 1024
+                if total_size > max_bytes:
+                    raise APIError(f"配置包解压后总大小超过限制({max_bytes // 1024 // 1024}MB)", 400)
+            except APIError:
+                raise
             except Exception:
                 raise APIError("上传的文件不是有效的tar文件", 400)
 
@@ -182,7 +201,7 @@ class FullSyncManager:
             if overwrite:
                 backup_dir = Path(config_manager.resolve_path(config_manager.get("server", "paths.backups")))
                 backup_dir.mkdir(parents=True, exist_ok=True)
-                backup_path = backup_dir / f"runtime_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                backup_path = backup_dir / f"runtime_backup_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
                 try:
                     shutil.copytree(self.runtime_path, backup_path)
                     logger.info(f"已创建runtime目录备份: {backup_path}")

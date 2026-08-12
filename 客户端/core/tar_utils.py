@@ -1,10 +1,22 @@
 import logging
 import os
+import shutil
 import tarfile
 from pathlib import Path
 from typing import List
 
 logger = logging.getLogger(__name__)
+
+
+def safe_join(base_dir: Path, name: str) -> Path:
+    """将（可能来自服务端的）相对路径安全地拼接在 base_dir 下。
+    拒绝绝对路径、'..' 穿越、以及通过符号链接逃逸出 base_dir 的路径。"""
+    candidate = base_dir / name
+    target_path = candidate.resolve()
+    base_resolved = base_dir.resolve()
+    if not str(target_path).startswith(str(base_resolved) + os.sep) and target_path != base_resolved:
+        raise ValueError(f"拒绝路径: 路径遍历攻击 {name}")
+    return target_path
 
 
 def safe_tar_member_path(member_name: str, extract_dir: Path) -> Path:
@@ -26,7 +38,7 @@ def extract_tar(tar_path: Path, extract_dir: Path) -> List[str]:
                     target_path.parent.mkdir(parents=True, exist_ok=True)
 
                     with tar_ref.extractfile(member) as source, open(target_path, 'wb') as target:
-                        target.write(source.read())
+                        shutil.copyfileobj(source, target, length=64 * 1024)
 
                     extracted_files.append(str(target_path))
                     logger.debug(f"解压文件: {member.name} -> {target_path}")

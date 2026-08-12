@@ -1,7 +1,7 @@
 import os
+import re
 import logging
 from pathlib import Path
-from werkzeug.utils import secure_filename
 
 from flask import request
 
@@ -9,6 +9,19 @@ from utils.config_loader import config_manager
 from utils.error_handler import success_response, error_response, APIError
 
 logger = logging.getLogger(__name__)
+
+_INVALID_FILENAME_CHARS = re.compile(r'[\x00-\x1f\x7f/:\\*?"<>|]')
+
+
+def safe_filename(filename):
+    """清理文件名：保留中文等Unicode字符，仅替换路径分隔符和非法字符。"""
+    if not filename:
+        return ""
+    name = Path(filename).name
+    name = _INVALID_FILENAME_CHARS.sub("_", name).strip(" .")
+    if not name or name == "..":
+        return ""
+    return name
 
 def handle_config_upload(request):
     """
@@ -26,8 +39,10 @@ def handle_config_upload(request):
     if file.filename == '':
         return error_response("没有选择文件", 400)
     
-    # 安全处理文件名
-    filename = secure_filename(file.filename)
+    # 安全处理文件名（保留中文等Unicode字符）
+    filename = safe_filename(file.filename)
+    if not filename:
+        return error_response("无效的文件名", 400)
     
     # 检查文件扩展名
     allowed_extensions = config_manager.get("server", "server.allowed_extensions", [])

@@ -19,6 +19,10 @@ class APIClient:
         url = f"{self.config.server_url}{endpoint}"
         kwargs.setdefault("timeout", self.config.timeout)
         kwargs.setdefault("verify", self.config.verify_ssl)
+        if self.config.api_token:
+            headers = dict(kwargs.get("headers") or {})
+            headers["X-Api-Token"] = self.config.api_token
+            kwargs["headers"] = headers
 
         for attempt in range(1, self.config.retry_count + 1):
             try:
@@ -32,7 +36,7 @@ class APIClient:
                     logger.warning(f"请求失败 (尝试 {attempt}/{self.config.retry_count})，{wait}秒后重试: {e}")
                     time.sleep(wait)
                     continue
-                raise APIError(f"请求失败，已达最大重试次数: {url}")
+                raise APIError(f"请求失败，已达最大重试次数: {url}") from e
 
             except requests.exceptions.HTTPError as e:
                 error_msg = str(e)
@@ -43,11 +47,17 @@ class APIClient:
                         error_msg = error_data.get('error', str(e))
                 except Exception:
                     pass
+                # 服务器瞬时错误（5xx）也纳入重试
+                if status_code >= 500 and attempt < self.config.retry_count:
+                    wait = 2 ** attempt
+                    logger.warning(f"服务器错误 {status_code} (尝试 {attempt}/{self.config.retry_count})，{wait}秒后重试")
+                    time.sleep(wait)
+                    continue
                 logger.warning(f"HTTP错误 {status_code}: {error_msg}")
-                raise APIError(error_msg)
+                raise APIError(error_msg) from e
 
             except Exception as e:
-                raise APIError(f"请求失败: {e}")
+                raise APIError(f"请求失败: {e}") from e
 
     def _request_json(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
         return self._request(method, endpoint, **kwargs).json()
@@ -66,6 +76,8 @@ class APIClient:
                   "stream": True}
         if params:
             kwargs["params"] = params
+        if self.config.api_token:
+            kwargs["headers"] = {"X-Api-Token": self.config.api_token}
 
         for attempt in range(1, self.config.retry_count + 1):
             try:
@@ -76,12 +88,13 @@ class APIClient:
                         f.write(chunk)
                 return target
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                target.unlink(missing_ok=True)
                 if attempt < self.config.retry_count:
                     wait = 2 ** attempt
                     logger.warning(f"下载失败 (尝试 {attempt}/{self.config.retry_count})，{wait}秒后重试: {e}")
                     time.sleep(wait)
                     continue
-                raise APIError(f"下载失败，已达最大重试次数: {url}")
+                raise APIError(f"下载失败，已达最大重试次数: {url}") from e
             except requests.exceptions.HTTPError as e:
                 error_msg = str(e)
                 try:
@@ -90,11 +103,21 @@ class APIClient:
                         error_msg = error_data.get('error', str(e))
                 except Exception:
                     pass
-                raise APIError(error_msg)
+                # 服务器瞬时错误（5xx）也纳入重试
+                if response.status_code >= 500 and attempt < self.config.retry_count:
+                    target.unlink(missing_ok=True)
+                    wait = 2 ** attempt
+                    logger.warning(f"服务器错误 {response.status_code} (尝试 {attempt}/{self.config.retry_count})，{wait}秒后重试")
+                    time.sleep(wait)
+                    continue
+                target.unlink(missing_ok=True)
+                raise APIError(error_msg) from e
             except APIError:
+                target.unlink(missing_ok=True)
                 raise
             except Exception as e:
-                raise APIError(f"下载失败: {e}")
+                target.unlink(missing_ok=True)
+                raise APIError(f"下载失败: {e}") from e
 
     def get_status(self) -> Dict[str, Any]:
         logger.info("获取服务器状态...")
