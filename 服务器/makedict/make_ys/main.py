@@ -10,6 +10,7 @@ from ys_api_crawler import (
     fetch_artifact_names,
     fetch_food_names,
     fetch_bag_item_names,
+    fetch_place_names,
 )
 
 
@@ -140,10 +141,15 @@ def main():
     bag_items = fetch_bag_item_names()
     logging.info(f"共获取到 {len(bag_items)} 个背包物品")
 
+    place_names = fetch_place_names()
+    logging.info(f"共获取到 {len(place_names)} 个地名")
+
     others = read_other_words()
 
     # 2. 合并所有来源
-    all_words = roles + weapons + artifacts + foods + bag_items + others
+    all_words = (
+        roles + weapons + artifacts + foods + bag_items + place_names + others
+    )
     logging.info(f"合并后共 {len(all_words)} 个词（未去重）")
 
     # 3. 预处理

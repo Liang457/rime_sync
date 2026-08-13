@@ -14,6 +14,15 @@ BASE_URL = (
 )
 APP_SN = "ys_obc"
 
+# 地图地名相关 API（米游社大地图，无需登录/签名）
+MAP_LIST_URL = (
+    "https://api-takumi.mihoyo.com/common/map_user/ys_obc/v1/map/list"
+)
+MAP_ANCHOR_URL = (
+    "https://api-takumi.mihoyo.com/common/map_user/ys_obc/v1/map/"
+    "map_anchor/list"
+)
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) "
@@ -95,6 +104,77 @@ def fetch_food_names():
 def fetch_bag_item_names():
     """获取所有背包物品名。"""
     return _fetch_channel(13)
+
+
+def _extract_anchor_names(items):
+    """
+    递归提取地图锚点中的地名（含父子层级）。
+
+    参数:
+        items: map_anchor/list 返回的锚点列表
+
+    返回:
+        地名列表
+    """
+    names = []
+    for item in items:
+        name = item.get("name")
+        if name:
+            names.append(name)
+        children = item.get("children") or []
+        if children:
+            names.extend(_extract_anchor_names(children))
+    return names
+
+
+def fetch_place_names():
+    """
+    从米游社大地图 API 获取全部地图地名。
+
+    动态读取地图列表，遍历每个地图的锚点接口，
+    跳过无锚点返回的地图（测试图、父节点图等）。
+    """
+    list_req = urllib.request.Request(
+        f"{MAP_LIST_URL}?app_sn={APP_SN}&lang=zh-cn", headers=HEADERS
+    )
+    with urllib.request.urlopen(list_req, timeout=30) as response:
+        list_data = json.loads(response.read().decode("utf-8"))
+
+    if list_data.get("retcode") != 0:
+        raise RuntimeError(
+            f"地图列表 API 返回错误: {list_data.get('message')} "
+            f"(retcode={list_data.get('retcode')})"
+        )
+
+    map_ids = [m["id"] for m in list_data["data"]["all_map_list"]]
+
+    seen = set()
+    names = []
+    for map_id in map_ids:
+        url = (
+            f"{MAP_ANCHOR_URL}?map_id={map_id}&app_sn={APP_SN}"
+            f"&lang=zh-cn"
+        )
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=60) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        if data.get("retcode") != 0:
+            raise RuntimeError(
+                f"地名 API 返回错误: {data.get('message')} "
+                f"(retcode={data.get('retcode')}, map_id={map_id})"
+            )
+
+        anchors = data["data"]["list"]
+        if not anchors:
+            continue
+
+        for name in _extract_anchor_names(anchors):
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+
+    return names
 
 
 if __name__ == "__main__":
