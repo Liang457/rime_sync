@@ -20,12 +20,6 @@ def compute_file_hash(filepath: Path) -> str:
         raise RuntimeError(f"计算文件哈希失败: {str(e)}")
 
 
-def compute_bytes_hash(data: bytes) -> str:
-    hash_obj = hashlib.sha3_256()
-    hash_obj.update(data)
-    return f"{HASH_ALGORITHM}:{hash_obj.hexdigest()}"
-
-
 def safe_parse_iso(iso_str: str) -> datetime:
     """安全解析 ISO 时间字符串，始终返回 naive 本地时间。"""
     s = iso_str.strip()

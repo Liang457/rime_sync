@@ -20,7 +20,6 @@ class ScriptRunner:
         self.makedict_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.makedict")))
         self.runtime_cn_dicts = Path(config_manager.resolve_path(config_manager.get("dict", "dict.cn_dicts_path")))
         self.max_execution_time = config_manager.get("script", "scripts.max_execution_time", 300)
-        self.allow_network = config_manager.get("script", "scripts.allow_network_access", True)
         self.log_execution = config_manager.get("script", "scripts.log_execution", True)
         self.trusted_users = set(config_manager.get("script", "scripts.trusted_users", []))
         

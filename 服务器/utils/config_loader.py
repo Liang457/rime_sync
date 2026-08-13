@@ -1,8 +1,6 @@
-import os
 import json
 import logging
 import copy
-from datetime import datetime
 from pathlib import Path
 
 class ConfigManager:
@@ -67,7 +65,6 @@ class ConfigManager:
                 "server": {
                     "host": "0.0.0.0",
                     "port": 10032,
-                    "debug": False,
                     "log_level": "INFO",
                     "log_file": "logs/server.log",
                     "log_max_bytes": 10485760,
@@ -85,8 +82,7 @@ class ConfigManager:
                 },
                 "git": {
                     "rime_ice_repo": "https://github.com/iDvel/rime-ice.git",
-                    "rime_ice_branch": "main",
-                    "update_check_interval": 3600
+                    "rime_ice_branch": "main"
                 },
                 "log_archive": {
                     "enabled": True,
@@ -95,11 +91,8 @@ class ConfigManager:
             },
             "sync.json": {
                 "sync": {
-                    "auto_cleanup_days": 30,
                     "max_files_per_device": 100,
                     "max_total_size_mb": 1024,
-                    "conflict_resolution": "latest",
-                    "hash_algorithm": "sha3-256",
                     "manifest_file": "_manifest.json"
                 },
                 "devices": {}
@@ -108,15 +101,12 @@ class ConfigManager:
                 "dict": {
                     "cn_dicts_path": "runtime/cn_dicts/",
                     "en_dicts_path": "runtime/en_dicts/",
-                    "allowed_extensions": [".dict.yaml", ".txt"],
-                    "auto_update_scripts": {}
+                    "allowed_extensions": [".dict.yaml", ".txt"]
                 }
             },
             "script.json": {
                 "scripts": {
                     "max_execution_time": 300,
-                    "allow_network_access": True,
-                    "allowed_hosts": ["*"],
                     "trusted_users": ["admin"],
                     "log_execution": True
                 }

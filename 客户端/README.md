@@ -73,18 +73,7 @@ python cli.py
     "android_trime_config": ""
   },
   "sync": {
-    "device_name": "",
-    "auto_sync_on_start": false,
-    "exclude_patterns": [
-      "*.userdb.txt.backup",
-      "*.log",
-      "temp/*",
-      "installation.yaml",
-      ".github/*",
-      "build/*",
-      "rime_ice.userdb"
-    ],
-    "conflict_resolution": "latest"
+    "device_name": ""
   },
   "logging": {
     "level": "INFO",

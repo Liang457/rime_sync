@@ -12,6 +12,31 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = Path(__file__).parent.parent / "client_config.json"
 
+DEFAULTS = {
+    "server": {
+        "url": "http://localhost:10032",
+        "timeout": 30,
+        "retry_count": 3,
+        "verify_ssl": False,
+        "api_token": "",
+    },
+    "rime": {
+        "config_dir": ".",
+        "platform": "windows",
+        "android_trime_config": "",
+    },
+    "sync": {
+        "device_name": "",
+    },
+    "logging": {
+        "level": "INFO",
+        "file": "logs/rime_client.log",
+        "max_size_mb": 10,
+        "archive_enabled": True,
+        "archive_retention_days": 90,
+    },
+}
+
 
 class ConfigManager:
     def __init__(self, config_path: Optional[Path] = None):
@@ -58,96 +83,42 @@ class ConfigManager:
 
         if "server" in config:
             new_config["server"] = config["server"]
-        else:
-            new_config["server"] = {"url": "http://localhost:10032", "timeout": 30}
 
         new_config["rime"] = {
             "config_dir": config.get("paths", {}).get("local_rime_dir", "."),
             "platform": "windows",
-            "android_trime_config": ""
+            "android_trime_config": "",
         }
 
         new_config["sync"] = {
             "device_name": config.get("device", {}).get("name", ""),
-            "auto_sync_on_start": False,
-            "exclude_patterns": config.get("sync", {}).get("exclude_patterns", []),
-            "conflict_resolution": config.get("sync", {}).get("conflict_resolution", "latest")
         }
 
         if "logging" in config:
             new_config["logging"] = config["logging"]
-        else:
-            new_config["logging"] = {
-                "level": "INFO",
-                "file": "logs/rime_client.log",
-                "max_size_mb": 10,
-                "archive_enabled": True,
-                "archive_retention_days": 90
-            }
 
         return new_config
 
+    @staticmethod
+    def _merge_defaults(defaults: Dict[str, Any], data: Dict[str, Any]) -> Dict[str, Any]:
+        """递归合并默认配置：data 中已有的值优先，缺失的键由 defaults 补充。"""
+        if isinstance(defaults, dict) and isinstance(data, dict):
+            result = dict(data)
+            for key, value in defaults.items():
+                if key in result:
+                    result[key] = ConfigManager._merge_defaults(value, result[key])
+                else:
+                    result[key] = copy.deepcopy(value)
+            return result
+        return data
+
     def _apply_defaults(self, config: Dict[str, Any]):
-        config.setdefault("server", {}).setdefault("url", "http://localhost:10032")
-        config.setdefault("server", {}).setdefault("timeout", 30)
-        config.setdefault("server", {}).setdefault("retry_count", 3)
-        config.setdefault("server", {}).setdefault("verify_ssl", False)
-        config.setdefault("server", {}).setdefault("api_token", "")
-
-        config.setdefault("rime", {}).setdefault("config_dir", ".")
-        config.setdefault("rime", {}).setdefault("platform", "windows")
-        config.setdefault("rime", {}).setdefault("android_trime_config", "")
-
-        config.setdefault("sync", {}).setdefault("device_name", "")
-        config.setdefault("sync", {}).setdefault("auto_sync_on_start", False)
-        config.setdefault("sync", {}).setdefault("exclude_patterns", [])
-        config.setdefault("sync", {}).setdefault("conflict_resolution", "latest")
-
-        config.setdefault("logging", {}).setdefault("level", "INFO")
-        config.setdefault("logging", {}).setdefault("file", "logs/rime_client.log")
-        config.setdefault("logging", {}).setdefault("max_size_mb", 10)
-        config.setdefault("logging", {}).setdefault("archive_enabled", True)
-        config.setdefault("logging", {}).setdefault("archive_retention_days", 90)
+        for section, values in DEFAULTS.items():
+            config[section] = self._merge_defaults(values, config.get(section, {}))
 
     def create_default(self):
-        default_config = {
-            "server": {
-                "url": "http://localhost:10032",
-                "timeout": 30,
-                "retry_count": 3,
-                "verify_ssl": False,
-                "api_token": ""
-            },
-            "rime": {
-                "config_dir": ".",
-                "platform": "windows",
-                "android_trime_config": ""
-            },
-            "sync": {
-                "device_name": "",
-                "auto_sync_on_start": False,
-                "exclude_patterns": [
-                    "*.userdb.txt.backup",
-                    "*.log",
-                    "temp/*",
-                    "installation.yaml",
-                    ".github/*",
-                    "build/*",
-                    "rime_ice.userdb"
-                ],
-                "conflict_resolution": "latest"
-            },
-            "logging": {
-                "level": "INFO",
-                "file": "logs/rime_client.log",
-                "max_size_mb": 10,
-                "archive_enabled": True,
-                "archive_retention_days": 90
-            }
-        }
-
         with open(self.config_path, "w", encoding="utf-8") as f:
-            json.dump(default_config, f, indent=2, ensure_ascii=False)
+            json.dump(copy.deepcopy(DEFAULTS), f, indent=2, ensure_ascii=False)
 
         logger.info(f"已创建默认配置文件: {self.config_path}")
         logger.info("请编辑配置文件并设置正确的服务器URL和Rime配置目录")
@@ -159,13 +130,6 @@ class ConfigManager:
             logger.info(f"配置已保存: {self.config_path}")
         except Exception as e:
             raise ConfigError(f"保存配置失败: {e}")
-
-    def get_device_name(self) -> str:
-        device_name = self.config["sync"]["device_name"]
-        if not device_name or device_name == "unknown":
-            device_name = self._read_device_from_installation(self.config)
-            self.config["sync"]["device_name"] = device_name
-        return device_name
 
     def _read_device_from_installation(self, config: Dict[str, Any]) -> str:
         config_dir = Path(config["rime"]["config_dir"])
@@ -203,10 +167,6 @@ class ConfigManager:
         return Path(self.config["rime"]["config_dir"])
 
     @property
-    def platform(self) -> str:
-        return self.config["rime"]["platform"]
-
-    @property
     def timeout(self) -> int:
         return self.config["server"]["timeout"]
 
@@ -223,8 +183,8 @@ class ConfigManager:
         return self.config["server"].get("api_token", "")
 
     @property
-    def rime_config_dir(self) -> str:
-        return self.config["rime"]["config_dir"]
+    def platform(self) -> str:
+        return self.config["rime"]["platform"]
 
     @property
     def log_config(self) -> Dict[str, Any]:
@@ -236,4 +196,8 @@ class ConfigManager:
 
     @property
     def device_name(self) -> str:
-        return self.get_device_name()
+        device_name = self.config["sync"]["device_name"]
+        if not device_name or device_name == "unknown":
+            device_name = self._read_device_from_installation(self.config)
+            self.config["sync"]["device_name"] = device_name
+        return device_name

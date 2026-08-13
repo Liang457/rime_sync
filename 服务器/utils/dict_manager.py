@@ -1,12 +1,13 @@
 import logging
-import tarfile
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import Dict
 
 from utils.config_loader import config_manager
 from utils.error_handler import APIError
-from utils.hash_utils import compute_file_hash, safe_parse_iso
+from utils.hash_utils import compute_file_hash
+from utils.archive_utils import parse_since, create_tar_file
+from utils.path_utils import safe_resolve
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +45,7 @@ class DictManager:
         else:
             raise APIError(f"无效的类别: {category}", 400)
         
-        since_time = None
-        if since:
-            try:
-                since_time = safe_parse_iso(since)
-            except ValueError:
-                raise APIError("无效的时间格式，请使用ISO格式", 400)
+        since_time = parse_since(since)
         
         for cat_name, cat_path in categories:
             if not cat_path.exists():
@@ -73,7 +69,7 @@ class DictManager:
                     rel_path = file_path.relative_to(cat_path)
                     
                     # 计算文件哈希
-                    file_hash = self._calculate_hash(file_path)
+                    file_hash = compute_file_hash(file_path)
                     
                     file_info = {
                         "path": str(rel_path),
@@ -130,7 +126,7 @@ class DictManager:
         
         # 安全检查：防止路径遍历
         try:
-            file_path.resolve().relative_to(base_path.resolve())
+            file_path = safe_resolve(base_path, file_name)
         except ValueError:
             raise APIError("无效的文件路径", 400)
         
@@ -150,10 +146,6 @@ class DictManager:
         返回:
             tar文件路径（位于tar缓存目录）
         """
-        import uuid
-
-        from utils.tar_cache import get_tar_cache_dir
-
         # 确定要包含的目录
         categories = []
         if category is None:
@@ -165,49 +157,30 @@ class DictManager:
         else:
             raise APIError(f"无效的类别: {category}", 400)
 
-        since_time = None
-        if since:
-            try:
-                since_time = safe_parse_iso(since)
-            except ValueError:
-                raise APIError("无效的时间格式，请使用ISO格式", 400)
+        since_time = parse_since(since)
 
-        # 直接在缓存目录生成tar文件（每次确认目录存在，避免被系统清理后报错）
-        tar_path = get_tar_cache_dir() / f"dict_{category or 'all'}_{uuid.uuid4().hex[:8]}.tar"
+        def build_tar(tarf):
+            for dir_name, dir_path in categories:
+                if not dir_path.exists():
+                    continue
 
-        try:
-            with tarfile.open(tar_path, 'w') as tarf:
-                for dir_name, dir_path in categories:
-                    if not dir_path.exists():
+                for file_path in dir_path.rglob('*'):
+                    if not file_path.is_file():
                         continue
 
-                    for file_path in dir_path.rglob('*'):
-                        if file_path.is_file():
-                            # 检查文件扩展名
-                            if self.allowed_extensions and not any(file_path.name.endswith(ext) for ext in self.allowed_extensions):
-                                continue
+                    # 检查文件扩展名
+                    if self.allowed_extensions and not any(file_path.name.endswith(ext) for ext in self.allowed_extensions):
+                        continue
 
-                            # 检查时间筛选
-                            if since_time:
-                                file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                                if file_mtime < since_time:
-                                    continue
+                    # 检查时间筛选
+                    if since_time and datetime.fromtimestamp(file_path.stat().st_mtime) < since_time:
+                        continue
 
-                            # 计算相对路径（保留目录结构）
-                            rel_path = file_path.relative_to(dir_path)
-                            arcname = f"{dir_name}/{rel_path}"
+                    # 计算相对路径（保留目录结构）
+                    rel_path = file_path.relative_to(dir_path)
+                    tarf.add(file_path, arcname=f"{dir_name}/{rel_path}")
 
-                            tarf.add(file_path, arcname=arcname)
+        return create_tar_file(f"dict_{category or 'all'}", build_tar)
 
-            return tar_path
-        except Exception as e:
-            # 清理临时文件
-            if tar_path.exists():
-                tar_path.unlink()
-            raise APIError(f"创建tar文件失败: {str(e)}", 500)
-    
-    def _calculate_hash(self, filepath: Path) -> str:
-        """计算文件 SHA3-256 哈希"""
-        return compute_file_hash(filepath)
-    
+
 dict_manager = DictManager()

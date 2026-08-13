@@ -12,7 +12,7 @@ from pathlib import Path
 from core.config import ConfigManager, DEFAULT_CONFIG_PATH
 from core.logs import setup_logging
 from core.api import APIClient
-from core.errors import ClientError, ConfigError, APIError
+from core.errors import ClientError, ConfigError
 from core import sync
 from core import dicts
 from core import fullsync
@@ -146,6 +146,117 @@ def _auto_add_to_dict(api, output_files, dict_line):
             logger.warning(f"添加到 rime_ice.dict.yaml 失败: {e}")
 
 
+def _report_update_rime_ice(api, force):
+    result = api.update_rime_ice(force)
+    data = result.get("data", {})
+    if data.get("upgraded"):
+        logger.info(f"rime-ice已更新: {data.get('message', '成功')}")
+        changed_files = data.get('changed_files', [])
+        if changed_files:
+            logger.info(f"变更文件: {', '.join(changed_files)}")
+        api.copy_rime_ice_to_runtime()
+    else:
+        logger.info(f"rime-ice已是最新: {data.get('message', '无更新')}")
+    return data
+
+
+def _run_single_script(api, script_name, version, add_to_dict=True, dict_line=18,
+                       extra_params=None):
+    result = api.run_script(script_name, version, extra_params)
+    data = result.get("data", {})
+    output_files = data.get('output_files', [])
+    total_size = data.get('total_size', 0)
+    if output_files:
+        logger.info(f"脚本执行成功: {', '.join(output_files)}")
+    else:
+        logger.info("脚本执行成功: 未知文件")
+    logger.info(f"生成大小: {total_size} 字节")
+
+    if add_to_dict and result.get("success"):
+        _auto_add_to_dict(api, output_files, dict_line)
+    return result
+
+
+def _run_all_scripts(api, scripts, version, add_to_dict=True, dict_line=18):
+    success_count = 0
+    fail_count = 0
+    for s in scripts:
+        try:
+            logger.info(f"执行: {s}")
+            result = api.run_script(s, version)
+            data = result.get("data", {})
+            output_files = data.get('output_files', [])
+            if output_files:
+                logger.info(f"  {s}: {', '.join(output_files)}")
+            else:
+                logger.info(f"  {s}: 完成")
+
+            if add_to_dict and result.get("success"):
+                _auto_add_to_dict(api, output_files, dict_line)
+
+            success_count += 1
+        except Exception as e:
+            logger.warning(f"  {s} 失败: {e}")
+            fail_count += 1
+
+    logger.info(f"全部脚本执行完成: {success_count} 成功, {fail_count} 失败")
+    return {"success": success_count, "failed": fail_count}
+
+
+def _print_sync_info(data):
+    devices = data.get("devices", [])
+    if devices:
+        for dev in devices:
+            name = dev.get('name', '未知')
+            files = dev.get('files', [])
+            logger.info(f"设备: {name}")
+            logger.info(f"  文件数: {len(files)}")
+            total_size = sum(f.get("size", 0) for f in files)
+            logger.info(f"  总大小: {total_size} 字节")
+            logger.info(f"  最后同步: {dev.get('timestamp', '未知')}")
+    else:
+        files = data.get("files", [])
+        if files:
+            logger.info(f"文件数: {len(files)}")
+            total_size = sum(f.get("size", 0) for f in files)
+            logger.info(f"总大小: {total_size} 字节")
+            logger.info(f"时间戳: {data.get('timestamp', '未知')}")
+        else:
+            logger.info("暂无同步数据")
+
+
+def _print_device_list(data):
+    devices = data.get("devices", [])
+    logger.info(f"发现 {len(devices)} 个设备:")
+    for device in devices:
+        if isinstance(device, str):
+            logger.info(f"  设备: {device}")
+            logger.info(f"    详细信息: 使用 sync-info 命令查看详情")
+        elif isinstance(device, dict):
+            logger.info(f"  设备: {device.get('name', '未知')}")
+            logger.info(f"    最后同步: {device.get('last_sync', '未知')}")
+            logger.info(f"    文件数: {device.get('total_files', 0)}")
+            logger.info(f"    总大小: {device.get('total_size', 0)} 字节")
+        else:
+            logger.info(f"  设备: {device} (未知格式)")
+
+
+def _print_health(api):
+    result = api.check_health()
+    if result.get("success"):
+        data = result.get("data", {})
+        disk = data.get("disk", {})
+        mem = data.get("memory", {})
+        logger.info(f"磁盘: {disk.get('percent', '?')}% ({disk.get('free_gb', '?')}GB 可用)")
+        logger.info(f"内存: {mem.get('percent', '?')}% ({mem.get('available_mb', '?')}MB 可用)")
+    else:
+        logger.warning("/api/health端点可能未实现，尝试使用/status...")
+        result = api.get_status()
+        data = result.get("data", {})
+        logger.info(f"服务器版本: {data.get('version', '未知')}")
+    return result
+
+
 def show_interactive_menu(config, api):
     while True:
         print("\n" + "=" * 50)
@@ -153,7 +264,7 @@ def show_interactive_menu(config, api):
         print("=" * 50)
 
         device_name = config.device_name
-        config_dir = config.rime_config_dir
+        config_dir = str(config.config_dir)
         server_url = config.server_url
 
         print(f"当前设备: {device_name}")
@@ -185,16 +296,7 @@ def show_interactive_menu(config, api):
 
             if choice == "1":
                 force = input("强制更新? (y/N): ").strip().lower() == 'y'
-                result = api.update_rime_ice(force)
-                data = result.get("data", {})
-                if data.get("upgraded"):
-                    logger.info(f"rime-ice已更新: {data.get('message', '成功')}")
-                    changed_files = data.get('changed_files', [])
-                    if changed_files:
-                        logger.info(f"变更文件: {', '.join(changed_files)}")
-                    api.copy_rime_ice_to_runtime()
-                else:
-                    logger.info(f"rime-ice已是最新: {data.get('message', '无更新')}")
+                _report_update_rime_ice(api, force)
 
             elif choice == "2":
                 print("\n执行自定义词库脚本:")
@@ -246,18 +348,7 @@ def show_interactive_menu(config, api):
                                 print("无效行号，使用默认值18")
                                 dict_line = 18
 
-                    result = api.run_script(script_name, version)
-                    data = result.get("data", {})
-                    output_files = data.get('output_files', [])
-                    total_size = data.get('total_size', 0)
-                    if output_files:
-                        logger.info(f"脚本执行成功: {', '.join(output_files)}")
-                    else:
-                        logger.info("脚本执行成功: 未知文件")
-                    logger.info(f"生成大小: {total_size} 字节")
-
-                    if add_to_dict and result.get("success"):
-                        _auto_add_to_dict(api, output_files, dict_line)
+                    _run_single_script(api, script_name, version, add_to_dict, dict_line)
 
                 elif sub_choice == "3":
                     result = api.list_scripts()
@@ -285,28 +376,7 @@ def show_interactive_menu(config, api):
                                 print("无效行号，使用默认值18")
                                 dict_line = 18
 
-                    success_count = 0
-                    fail_count = 0
-                    for s in scripts:
-                        try:
-                            logger.info(f"执行: {s}")
-                            result = api.run_script(s, version)
-                            data = result.get("data", {})
-                            output_files = data.get('output_files', [])
-                            if output_files:
-                                logger.info(f"  {s}: {', '.join(output_files)}")
-                            else:
-                                logger.info(f"  {s}: 完成")
-
-                            if add_to_dict and result.get("success"):
-                                _auto_add_to_dict(api, output_files, dict_line)
-
-                            success_count += 1
-                        except Exception as e:
-                            logger.warning(f"  {s} 失败: {e}")
-                            fail_count += 1
-
-                    logger.info(f"全部脚本执行完成: {success_count} 成功, {fail_count} 失败")
+                    _run_all_scripts(api, scripts, version, add_to_dict, dict_line)
 
             elif choice == "3":
                 print("\n同步用户输入词库 (增量):")
@@ -363,50 +433,14 @@ def show_interactive_menu(config, api):
 
             elif choice == "7":
                 result = api.get_sync_info()
-                data = result.get("data", {})
-                devices = data.get("devices", [])
-                if devices:
-                    for dev in devices:
-                        name = dev.get('name', '未知')
-                        files = dev.get('files', [])
-                        logger.info(f"设备: {name}")
-                        logger.info(f"  文件数: {len(files)}")
-                        total_size = sum(f.get("size", 0) for f in files)
-                        logger.info(f"  总大小: {total_size} 字节")
-                        logger.info(f"  最后同步: {dev.get('timestamp', '未知')}")
-                else:
-                    logger.info("暂无同步数据")
+                _print_sync_info(result.get("data", {}))
 
             elif choice == "8":
                 result = api.get_device_list()
-                data = result.get("data", {})
-                devices = data.get("devices", [])
-                logger.info(f"发现 {len(devices)} 个设备:")
-                for device in devices:
-                    if isinstance(device, str):
-                        logger.info(f"  设备: {device}")
-                        logger.info(f"    详细信息: 使用 sync-info 命令查看详情")
-                    elif isinstance(device, dict):
-                        logger.info(f"  设备: {device.get('name', '未知')}")
-                        logger.info(f"    最后同步: {device.get('last_sync', '未知')}")
-                        logger.info(f"    文件数: {device.get('total_files', 0)}")
-                        logger.info(f"    总大小: {device.get('total_size', 0)} 字节")
-                    else:
-                        logger.info(f"  设备: {device} (未知格式)")
+                _print_device_list(result.get("data", {}))
 
             elif choice == "9":
-                result = api.check_health()
-                if result.get("success"):
-                    data = result.get("data", {})
-                    disk = data.get("disk", {})
-                    mem = data.get("memory", {})
-                    logger.info(f"磁盘: {disk.get('percent', '?')}% ({disk.get('free_gb', '?')}GB 可用)")
-                    logger.info(f"内存: {mem.get('percent', '?')}% ({mem.get('available_mb', '?')}MB 可用)")
-                else:
-                    logger.warning("/api/health端点可能未实现，尝试使用/status...")
-                    result = api.get_status()
-                    data = result.get("data", {})
-                    logger.info(f"服务器版本: {data.get('version', '未知')}")
+                _print_health(api)
 
             elif choice == "10":
                 print("\n修改配置:")
@@ -422,7 +456,7 @@ def show_interactive_menu(config, api):
                         config.config['server']['url'] = new_url
                         config.save()
                 elif sub_choice == "3":
-                    new_dir = input(f"新Rime配置目录 (当前: {config.rime_config_dir}): ").strip()
+                    new_dir = input(f"新Rime配置目录 (当前: {config.config_dir}): ").strip()
                     if new_dir:
                         config.config['rime']['config_dir'] = new_dir
                         config.save()
@@ -461,34 +495,16 @@ def _dispatch_command(args, config, api):
         return data
 
     elif command == "update-rime-ice":
-        result = api.update_rime_ice(args.force)
-        data = result.get("data", {})
-        if data.get("upgraded"):
-            logger.info(f"rime-ice已更新: {data.get('message', '成功')}")
-            changed_files = data.get('changed_files', [])
-            if changed_files:
-                logger.info(f"变更文件: {', '.join(changed_files)}")
-            api.copy_rime_ice_to_runtime()
-        else:
-            logger.info(f"rime-ice已是最新: {data.get('message', '无更新')}")
-        return data
+        return _report_update_rime_ice(api, args.force)
 
     elif command == "run-script":
         extra_params = json.loads(args.extra) if args.extra else None
-        result = api.run_script(args.script_name, args.version, extra_params)
-        data = result.get("data", {})
-        output_files = data.get('output_files', [])
-        total_size = data.get('total_size', 0)
-        if output_files:
-            logger.info(f"脚本执行成功: {', '.join(output_files)}")
-        else:
-            logger.info("脚本执行成功: 未知文件")
-        logger.info(f"生成大小: {total_size} 字节")
-
-        if not getattr(args, 'no_add_to_dict', False) and result.get("success"):
-            _auto_add_to_dict(api, output_files, getattr(args, 'dict_line', 18))
-
-        return data
+        return _run_single_script(
+            api, args.script_name, args.version,
+            add_to_dict=not getattr(args, 'no_add_to_dict', False),
+            dict_line=getattr(args, 'dict_line', 18),
+            extra_params=extra_params,
+        )
 
     elif command == "list-scripts":
         result = api.list_scripts()
@@ -512,32 +528,11 @@ def _dispatch_command(args, config, api):
 
         logger.info(f"将执行 {len(scripts)} 个脚本: {', '.join(scripts)}")
 
-        dict_line = getattr(args, 'dict_line', 18)
-        no_add = getattr(args, 'no_add_to_dict', False)
-
-        success_count = 0
-        fail_count = 0
-        for s in scripts:
-            try:
-                logger.info(f"执行: {s}")
-                result = api.run_script(s, args.version)
-                data = result.get("data", {})
-                output_files = data.get('output_files', [])
-                if output_files:
-                    logger.info(f"  {s}: {', '.join(output_files)}")
-                else:
-                    logger.info(f"  {s}: 完成")
-
-                if not no_add and result.get("success"):
-                    _auto_add_to_dict(api, output_files, dict_line)
-
-                success_count += 1
-            except Exception as e:
-                logger.warning(f"  {s} 失败: {e}")
-                fail_count += 1
-
-        logger.info(f"全部脚本执行完成: {success_count} 成功, {fail_count} 失败")
-        return {"success": success_count, "failed": fail_count}
+        return _run_all_scripts(
+            api, scripts, args.version,
+            add_to_dict=not getattr(args, 'no_add_to_dict', False),
+            dict_line=getattr(args, 'dict_line', 18),
+        )
 
     elif command == "edit-file":
         result = api.edit_file(args.path, args.line, args.content, args.action)
@@ -560,23 +555,7 @@ def _dispatch_command(args, config, api):
     elif command == "sync-info":
         result = api.get_sync_info(args.device, args.since)
         data = result.get("data", {})
-        devices = data.get("devices", [])
-        if devices:
-            for dev in devices:
-                name = dev.get('name', '未知')
-                files = dev.get('files', [])
-                logger.info(f"设备: {name}")
-                logger.info(f"  文件数: {len(files)}")
-                total_size = sum(f.get("size", 0) for f in files)
-                logger.info(f"  总大小: {total_size} 字节")
-                logger.info(f"  最后同步: {dev.get('timestamp', '未知')}")
-        else:
-            files = data.get("files", [])
-            if files:
-                logger.info(f"文件数: {len(files)}")
-                total_size = sum(f.get("size", 0) for f in files)
-                logger.info(f"总大小: {total_size} 字节")
-                logger.info(f"时间戳: {data.get('timestamp', '未知')}")
+        _print_sync_info(data)
         return data
 
     elif command == "sync-download-tar":
@@ -633,35 +612,11 @@ def _dispatch_command(args, config, api):
     elif command == "device-list":
         result = api.get_device_list()
         data = result.get("data", {})
-        devices = data.get("devices", [])
-        logger.info(f"发现 {len(devices)} 个设备:")
-        for device in devices:
-            if isinstance(device, str):
-                logger.info(f"  设备: {device}")
-                logger.info(f"    详细信息: 使用 sync-info 命令查看详情")
-            elif isinstance(device, dict):
-                logger.info(f"  设备: {device.get('name', '未知')}")
-                logger.info(f"    最后同步: {device.get('last_sync', '未知')}")
-                logger.info(f"    文件数: {device.get('total_files', 0)}")
-                logger.info(f"    总大小: {device.get('total_size', 0)} 字节")
-            else:
-                logger.info(f"  设备: {device} (未知格式)")
+        _print_device_list(data)
         return data
 
     elif command == "health":
-        result = api.check_health()
-        if result.get("success"):
-            data = result.get("data", {})
-            disk = data.get("disk", {})
-            mem = data.get("memory", {})
-            logger.info(f"磁盘: {disk.get('percent', '?')}% ({disk.get('free_gb', '?')}GB 可用)")
-            logger.info(f"内存: {mem.get('percent', '?')}% ({mem.get('available_mb', '?')}MB 可用)")
-        else:
-            logger.warning("/api/health端点可能未实现，尝试使用/status...")
-            result = api.get_status()
-            data = result.get("data", {})
-            logger.info(f"服务器版本: {data.get('version', '未知')}")
-        return result
+        return _print_health(api)
 
     elif command == "interactive":
         show_interactive_menu(config, api)

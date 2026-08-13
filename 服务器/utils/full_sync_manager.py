@@ -4,11 +4,12 @@ import shutil
 import tempfile
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Optional, Set
+from typing import Dict, Set
 
 from utils.config_loader import config_manager
 from utils.error_handler import APIError
-from utils.hash_utils import compute_file_hash, safe_parse_iso
+from utils.hash_utils import compute_file_hash
+from utils.archive_utils import parse_since, create_tar_file
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +24,6 @@ class FullSyncManager:
             "build/",
             "rime_ice.userdb"
         ]
-    
-    def calculate_hash(self, filepath: Path) -> str:
-        """计算文件 SHA3-256 哈希"""
-        return compute_file_hash(filepath)
     
     def get_exclude_patterns(self, extra_excludes: str = None) -> Set[str]:
         """获取排除模式集合"""
@@ -66,12 +63,7 @@ class FullSyncManager:
         total_size = 0
 
         # since 时间戳提前解析一次（避免循环内重复解析），无效格式返回 400
-        since_time = None
-        if since:
-            try:
-                since_time = safe_parse_iso(since)
-            except (ValueError, TypeError):
-                raise APIError("无效的时间格式，请使用ISO格式", 400)
+        since_time = parse_since(since)
 
         # 递归遍历runtime目录
         for file_path in self.runtime_path.rglob('*'):
@@ -93,7 +85,7 @@ class FullSyncManager:
                 "path": str(rel_path).replace('\\', '/'),
                 "size": file_path.stat().st_size,
                 "modified": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
-                "hash": self.calculate_hash(file_path),
+                "hash": compute_file_hash(file_path),
                 "type": "file"
             }
             
@@ -109,52 +101,29 @@ class FullSyncManager:
     
     def create_tar(self, exclude_patterns: Set[str] = None, since: str = None) -> Path:
         """创建完整配置包的tar文件"""
-        import uuid
-
-        from utils.tar_cache import get_tar_cache_dir
-
         if exclude_patterns is None:
             exclude_patterns = self.get_exclude_patterns()
 
         # since 时间戳提前解析一次，无效格式返回 400
-        since_time = None
-        if since:
-            try:
-                since_time = safe_parse_iso(since)
-            except (ValueError, TypeError):
-                raise APIError("无效的时间格式，请使用ISO格式", 400)
+        since_time = parse_since(since)
 
-        # 直接在缓存目录生成tar文件（每次确认目录存在，避免被系统清理后报错）
-        tar_path = get_tar_cache_dir() / f"fullsync_{uuid.uuid4().hex[:8]}.tar"
+        def build_tar(tarf):
+            for file_path in self.runtime_path.rglob('*'):
+                if not file_path.is_file():
+                    continue
 
-        try:
-            with tarfile.open(tar_path, 'w') as tarf:
-                for file_path in self.runtime_path.rglob('*'):
-                    if not file_path.is_file():
-                        continue
+                # 检查是否被排除
+                if self.is_excluded(file_path, exclude_patterns):
+                    continue
 
-                    # 检查是否被排除
-                    if self.is_excluded(file_path, exclude_patterns):
-                        continue
+                # 时间筛选
+                if since_time and datetime.fromtimestamp(file_path.stat().st_mtime) < since_time:
+                    continue
 
-                    # 时间筛选
-                    if since_time:
-                        file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                        if file_mtime < since_time:
-                            continue
+                rel_path = file_path.relative_to(self.runtime_path)
+                tarf.add(str(file_path), arcname=str(rel_path))
 
-                    rel_path = file_path.relative_to(self.runtime_path)
-                    tarf.add(str(file_path), arcname=str(rel_path))
-
-            logger.info(f"完整配置包tar创建成功: {tar_path}")
-            return tar_path
-
-        except Exception as e:
-            logger.error(f"创建tar文件失败: {e}")
-            # 清理临时文件
-            if tar_path.exists():
-                tar_path.unlink()
-            raise APIError(f"创建tar文件失败: {str(e)}", 500)
+        return create_tar_file("fullsync", build_tar)
 
     def upload_tar(self, tar_content, overwrite: bool = False, hash_value: str = None) -> Dict:
         """上传完整配置包tar文件"""

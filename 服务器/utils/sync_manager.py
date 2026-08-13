@@ -1,4 +1,3 @@
-import os
 import json
 import logging
 import tarfile
@@ -7,11 +6,13 @@ import errno
 import threading
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 from utils.config_loader import config_manager
 from utils.error_handler import APIError
 from utils.hash_utils import compute_file_hash, safe_parse_iso
+from utils.archive_utils import parse_since, create_tar_file
+from utils.path_utils import safe_resolve
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +47,7 @@ class SyncManager:
         if len(device_name) > 64:
             return False
         return True
-    
-    def calculate_hash(self, filepath: Path) -> str:
-        """计算文件 SHA3-256 哈希"""
-        return compute_file_hash(filepath)
-    
+
     def load_manifest(self, device_name: str) -> Dict:
         """加载设备的清单文件"""
         device_path = self.get_device_path(device_name)
@@ -84,7 +81,7 @@ class SyncManager:
             manifest = self.load_manifest(device_name)
             
             file_info = {
-                "hash": self.calculate_hash(filepath),
+                "hash": compute_file_hash(filepath),
                 "size": filepath.stat().st_size,
                 "modified": datetime.now().isoformat(),
                 "type": "file"
@@ -104,9 +101,8 @@ class SyncManager:
         device_path.mkdir(parents=True, exist_ok=True)
         
         # 安全检查：防止路径遍历
-        file_path = (device_path / filename).resolve()
         try:
-            file_path.relative_to(device_path.resolve())
+            file_path = safe_resolve(device_path, filename)
         except ValueError:
             raise APIError("无效的文件名", 400)
         
@@ -211,7 +207,7 @@ class SyncManager:
 
                         # 更新清单（收集到内存，最后一次性写入）
                         file_info = {
-                            "hash": self.calculate_hash(target_path),
+                            "hash": compute_file_hash(target_path),
                             "size": target_path.stat().st_size,
                             "modified": datetime.now().isoformat(),
                             "type": "file"
@@ -248,12 +244,7 @@ class SyncManager:
         manifest = self.load_manifest(device_name)
         
         # 解析 since 时间戳
-        since_time = None
-        if since:
-            try:
-                since_time = safe_parse_iso(since)
-            except (ValueError, TypeError):
-                raise APIError("无效的时间格式，请使用ISO格式", 400)
+        since_time = parse_since(since)
         
         if filename:
             # 获取单个文件信息
@@ -360,11 +351,10 @@ class SyncManager:
             raise APIError("设备名不合法", 400)
         
         device_path = self.get_device_path(device_name)
-        file_path = device_path / filename
         
         # 安全检查：防止路径遍历
         try:
-            file_path.resolve().relative_to(device_path.resolve())
+            file_path = safe_resolve(device_path, filename)
         except ValueError:
             raise APIError("无效的文件路径", 400)
         
@@ -375,10 +365,6 @@ class SyncManager:
     
     def create_tar(self, device_name: str, since: str = None) -> Path:
         """创建设备的tar文件（直接写入tar缓存目录）"""
-        import uuid
-
-        from utils.tar_cache import get_tar_cache_dir
-
         if not self.validate_device_name(device_name):
             raise APIError("设备名不合法", 400)
 
@@ -386,30 +372,17 @@ class SyncManager:
         if not device_path.exists():
             raise APIError(f"设备不存在: {device_name}", 404)
 
-        # 直接在缓存目录生成tar文件（每次确认目录存在，避免被系统清理后报错）
-        tar_path = get_tar_cache_dir() / f"sync_{device_name}_{uuid.uuid4().hex[:8]}.tar"
+        since_time = parse_since(since)
 
-        try:
-            with tarfile.open(tar_path, 'w') as tarf:
-                for file_path in device_path.rglob('*'):
-                    if file_path.is_file() and file_path.name != self.manifest_filename:
-                        rel_path = file_path.relative_to(device_path)
+        def build_tar(tarf):
+            for file_path in device_path.rglob('*'):
+                if file_path.is_file() and file_path.name != self.manifest_filename:
+                    rel_path = file_path.relative_to(device_path)
+                    # 检查时间筛选
+                    if since_time and datetime.fromtimestamp(file_path.stat().st_mtime) < since_time:
+                        continue
+                    tarf.add(file_path, arcname=str(rel_path))
 
-                        # 检查时间筛选
-                        if since:
-                            file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                            since_time = safe_parse_iso(since)
-                            if file_mtime < since_time:
-                                continue
-
-                        # 添加到tar
-                        tarf.add(file_path, arcname=str(rel_path))
-
-            return tar_path
-        except Exception as e:
-            # 清理临时文件
-            if tar_path.exists():
-                tar_path.unlink()
-            raise APIError(f"创建tar文件失败: {str(e)}", 500)
+        return create_tar_file(f"sync_{device_name}", build_tar)
 
 sync_manager = SyncManager()

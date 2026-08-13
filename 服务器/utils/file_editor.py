@@ -1,4 +1,3 @@
-import os
 import logging
 from pathlib import Path
 
@@ -97,19 +96,3 @@ def edit_file(file_path, line, content, action="insert"):
         "total_lines": len(lines),
         "content_preview": content[:100] + ("..." if len(content) > 100 else "")
     }
-
-def validate_file_path(file_path):
-    """验证文件路径是否合法"""
-    runtime_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.runtime")))
-    target_path = (runtime_path / file_path).resolve()
-    
-    # 安全检查
-    if not target_path.is_relative_to(runtime_path.resolve()):
-        return False
-    
-    # 检查是否在allowed_extensions中
-    allowed_extensions = config_manager.get("server", "server.allowed_extensions", [])
-    if allowed_extensions and not any(target_path.name.endswith(ext) for ext in allowed_extensions):
-        return False
-    
-    return True

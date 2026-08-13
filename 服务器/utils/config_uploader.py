@@ -1,4 +1,3 @@
-import os
 import re
 import logging
 from pathlib import Path
@@ -6,7 +5,7 @@ from pathlib import Path
 from flask import request
 
 from utils.config_loader import config_manager
-from utils.error_handler import success_response, error_response, APIError
+from utils.error_handler import success_response, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +94,6 @@ def handle_config_upload(request):
         
         logger.info(f"配置文件上传成功: {filename}, 设备: {device}, 大小: {file_size}字节")
         
-        # 更新设备信息（简化）
-        update_device_info(device, filename)
-        
         return success_response({
             "filename": filename,
             "size": file_size,
@@ -109,19 +105,3 @@ def handle_config_upload(request):
     except Exception as e:
         logger.error(f"文件上传失败: {filename}, 错误: {e}")
         return error_response(f"文件上传失败: {str(e)}", 500)
-
-def update_device_info(device, filename):
-    """更新设备信息（简化版本）"""
-    try:
-        # 这里可以更新 devices.json 中的设备信息
-        # 简化实现：只记录日志
-        logger.debug(f"设备 {device} 上传了配置文件: {filename}")
-    except Exception as e:
-        logger.warning(f"更新设备信息失败: {e}")
-
-def validate_config_file(filepath):
-    """验证配置文件（简化版本）"""
-    # 这里可以添加YAML语法验证等
-    # 暂时只检查文件是否存在且可读
-    path = Path(filepath)
-    return path.exists() and path.is_file()

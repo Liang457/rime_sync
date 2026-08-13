@@ -6,7 +6,7 @@ from typing import Optional, Dict, List
 
 from core.config import ConfigManager
 from core.api import APIClient
-from core.tar_utils import extract_tar, safe_join
+from core.tar_utils import extract_tar, save_bytes
 from core.hash_utils import compute_file_hash
 from core.errors import APIError
 
@@ -169,14 +169,10 @@ def download_dict_file(config: ConfigManager, api: APIClient,
     else:
         target_dir = config_dir
 
-    target_dir.mkdir(parents=True, exist_ok=True)
     try:
-        local_path = safe_join(target_dir, filename)
+        local_path = save_bytes(target_dir, filename, data)
     except ValueError as e:
         logger.warning(f"拒绝保存非法文件名: {e}")
         raise APIError(f"非法文件名: {filename}") from e
-
-    with open(local_path, "wb") as f:
-        f.write(data)
     logger.info(f"文件已保存: {local_path}")
     return local_path

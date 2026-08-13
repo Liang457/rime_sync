@@ -15,28 +15,23 @@ class APIClient:
         self.config = config
         self.session = requests.Session()
 
-    def _request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
-        url = f"{self.config.server_url}{endpoint}"
-        kwargs.setdefault("timeout", self.config.timeout)
-        kwargs.setdefault("verify", self.config.verify_ssl)
-        if self.config.api_token:
-            headers = dict(kwargs.get("headers") or {})
-            headers["X-Api-Token"] = self.config.api_token
-            kwargs["headers"] = headers
-
+    def _with_retry(self, url: str, action: str, request_fn, on_error=None):
+        """带重试的 HTTP 请求。action 用于日志前缀；on_error 在每次失败时调用（用于清理）。"""
         for attempt in range(1, self.config.retry_count + 1):
             try:
-                response = self.session.request(method, url, **kwargs)
+                response = request_fn()
                 response.raise_for_status()
                 return response
 
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+                if on_error:
+                    on_error()
                 if attempt < self.config.retry_count:
                     wait = 2 ** attempt
-                    logger.warning(f"请求失败 (尝试 {attempt}/{self.config.retry_count})，{wait}秒后重试: {e}")
+                    logger.warning(f"{action}失败 (尝试 {attempt}/{self.config.retry_count})，{wait}秒后重试: {e}")
                     time.sleep(wait)
                     continue
-                raise APIError(f"请求失败，已达最大重试次数: {url}") from e
+                raise APIError(f"{action}失败，已达最大重试次数: {url}") from e
 
             except requests.exceptions.HTTPError as e:
                 error_msg = str(e)
@@ -49,15 +44,36 @@ class APIClient:
                     pass
                 # 服务器瞬时错误（5xx）也纳入重试
                 if status_code >= 500 and attempt < self.config.retry_count:
+                    if on_error:
+                        on_error()
                     wait = 2 ** attempt
                     logger.warning(f"服务器错误 {status_code} (尝试 {attempt}/{self.config.retry_count})，{wait}秒后重试")
                     time.sleep(wait)
                     continue
+                if on_error:
+                    on_error()
                 logger.warning(f"HTTP错误 {status_code}: {error_msg}")
                 raise APIError(error_msg) from e
 
+            except APIError:
+                if on_error:
+                    on_error()
+                raise
             except Exception as e:
-                raise APIError(f"请求失败: {e}") from e
+                if on_error:
+                    on_error()
+                raise APIError(f"{action}失败: {e}") from e
+
+    def _request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
+        url = f"{self.config.server_url}{endpoint}"
+        kwargs.setdefault("timeout", self.config.timeout)
+        kwargs.setdefault("verify", self.config.verify_ssl)
+        if self.config.api_token:
+            headers = dict(kwargs.get("headers") or {})
+            headers["X-Api-Token"] = self.config.api_token
+            kwargs["headers"] = headers
+
+        return self._with_retry(url, "请求", lambda: self.session.request(method, url, **kwargs))
 
     def _request_json(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
         return self._request(method, endpoint, **kwargs).json()
@@ -79,45 +95,12 @@ class APIClient:
         if self.config.api_token:
             kwargs["headers"] = {"X-Api-Token": self.config.api_token}
 
-        for attempt in range(1, self.config.retry_count + 1):
-            try:
-                response = self.session.get(url, **kwargs)
-                response.raise_for_status()
-                with open(target, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-                return target
-            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
-                target.unlink(missing_ok=True)
-                if attempt < self.config.retry_count:
-                    wait = 2 ** attempt
-                    logger.warning(f"下载失败 (尝试 {attempt}/{self.config.retry_count})，{wait}秒后重试: {e}")
-                    time.sleep(wait)
-                    continue
-                raise APIError(f"下载失败，已达最大重试次数: {url}") from e
-            except requests.exceptions.HTTPError as e:
-                error_msg = str(e)
-                try:
-                    if response.headers.get("content-type", "").startswith("application/json"):
-                        error_data = response.json()
-                        error_msg = error_data.get('error', str(e))
-                except Exception:
-                    pass
-                # 服务器瞬时错误（5xx）也纳入重试
-                if response.status_code >= 500 and attempt < self.config.retry_count:
-                    target.unlink(missing_ok=True)
-                    wait = 2 ** attempt
-                    logger.warning(f"服务器错误 {response.status_code} (尝试 {attempt}/{self.config.retry_count})，{wait}秒后重试")
-                    time.sleep(wait)
-                    continue
-                target.unlink(missing_ok=True)
-                raise APIError(error_msg) from e
-            except APIError:
-                target.unlink(missing_ok=True)
-                raise
-            except Exception as e:
-                target.unlink(missing_ok=True)
-                raise APIError(f"下载失败: {e}") from e
+        response = self._with_retry(url, "下载", lambda: self.session.get(url, **kwargs),
+                                    on_error=lambda: target.unlink(missing_ok=True))
+        with open(target, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return target
 
     def get_status(self) -> Dict[str, Any]:
         logger.info("获取服务器状态...")
@@ -219,16 +202,6 @@ class APIClient:
             params["since"] = since
         return self._request_json("GET", "/api/full_sync/info", params=params)
 
-    def download_dict_tar(self, category: Optional[str] = None,
-                          since: Optional[str] = None) -> bytes:
-        logger.info("下载词库tar包...")
-        params = {}
-        if category:
-            params["category"] = category
-        if since:
-            params["since"] = since
-        return self._request_bytes("GET", "/api/dict/get/tar", params=params)
-
     def download_dict_file(self, filename: str,
                            category: Optional[str] = None) -> bytes:
         logger.info(f"下载词库文件: {filename}")
@@ -236,16 +209,6 @@ class APIClient:
         if category:
             params["category"] = category
         return self._request_bytes("GET", f"/api/dict/get/file/{filename}", params=params)
-
-    def download_full_sync(self, exclude: Optional[str] = None,
-                           since: Optional[str] = None) -> bytes:
-        logger.info("下载完整配置包...")
-        params = {}
-        if exclude:
-            params["exclude"] = exclude
-        if since:
-            params["since"] = since
-        return self._request_bytes("GET", "/api/full_sync/download", params=params)
 
     def upload_full_sync(self, file_path: str, overwrite: bool = False) -> Dict[str, Any]:
         from pathlib import Path
@@ -274,14 +237,6 @@ class APIClient:
             return self._request_json("POST", "/api/sync/upload/file", files={
                 'file': (filename, f, 'application/octet-stream')
             }, data={'device': device, 'filename': filename})
-
-    def download_sync_tar(self, device: str,
-                          since: Optional[str] = None) -> bytes:
-        logger.info(f"下载用户词库tar包（设备: {device}）...")
-        params = {}
-        if since:
-            params["since"] = since
-        return self._request_bytes("GET", f"/api/sync/get/{device}/tar", params=params)
 
     def download_sync_file(self, filename: str, device: str) -> bytes:
         logger.info(f"下载用户词库文件: {filename}（设备: {device}）...")

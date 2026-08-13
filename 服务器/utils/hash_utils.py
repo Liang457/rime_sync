@@ -22,13 +22,6 @@ def compute_file_hash(filepath: Path) -> str:
         raise APIError(f"计算文件哈希失败: {str(e)}", 500)
 
 
-def compute_bytes_hash(data: bytes) -> str:
-    """计算字节数据的 SHA3-256 哈希"""
-    hash_obj = hashlib.sha3_256()
-    hash_obj.update(data)
-    return f"{HASH_ALGORITHM}:{hash_obj.hexdigest()}"
-
-
 def safe_parse_iso(iso_str: str) -> datetime:
     """安全解析 ISO 时间字符串，正确处理 Z 后缀和已有时区偏移。
     始终返回 naive 本地时间，以便与 datetime.fromtimestamp() 的结果直接比较。"""

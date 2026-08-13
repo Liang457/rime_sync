@@ -1,7 +1,9 @@
-import os
+import re
+import shutil
 import logging
 import json
 import subprocess
+from datetime import datetime as dt
 from pathlib import Path
 
 from utils.config_loader import config_manager
@@ -39,7 +41,6 @@ def get_rime_ice_version():
         try:
             with open(version_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-                import re
                 version_match = re.search(r'rime-ice\s+v?(\d+\.\d+\.\d+)', content, re.IGNORECASE)
                 if version_match:
                     return version_match.group(1)
@@ -71,6 +72,33 @@ def _get_head_commit(repo_path):
     return stdout.strip()
 
 
+def _pull_with_changes(repo_path, local_commit, message):
+    """执行 pull --ff-only，并返回变更结果字典。"""
+    returncode, stdout, stderr = _run_git(
+        ["pull", "--ff-only"], cwd=str(repo_path)
+    )
+    if returncode != 0:
+        logger.error(f"git pull 失败: {stderr}")
+        raise APIError(f"更新失败: {stderr[:200]}", 500)
+    new_commit = _get_head_commit(repo_path)
+
+    changed_files = []
+    returncode, diff_output, _ = _run_git(
+        ["diff", "--name-only", f"{local_commit}..{new_commit}"],
+        cwd=str(repo_path)
+    )
+    if diff_output:
+        changed_files = [f.strip() for f in diff_output.split('\n') if f.strip()]
+
+    return {
+        "previous_commit": local_commit,
+        "current_commit": new_commit,
+        "changed_files": changed_files,
+        "upgraded": True,
+        "message": message.format(local=local_commit[:8], new=new_commit[:8])
+    }
+
+
 def update_rime_ice_repo(force=False):
     repo_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.rime_ice_original")))
 
@@ -78,7 +106,6 @@ def update_rime_ice_repo(force=False):
     if not repo_path.exists() or not is_valid_git_repo(repo_path):
         if repo_path.exists():
             logger.warning(f"rime-ice目录存在但不是有效的git仓库，将删除并重新克隆")
-            import shutil
             shutil.rmtree(repo_path)
 
         logger.info(f"rime-ice仓库不存在或无效，开始克隆...")
@@ -96,29 +123,9 @@ def update_rime_ice_repo(force=False):
 
         if force:
             logger.info("强制更新rime-ice仓库")
-            returncode, stdout, stderr = _run_git(
-                ["pull", "--ff-only"], cwd=str(repo_path)
+            return _pull_with_changes(
+                repo_path, local_commit, "强制更新完成: {local} -> {new}"
             )
-            if returncode != 0:
-                logger.error(f"git pull 失败: {stderr}")
-                raise APIError(f"更新失败: {stderr[:200]}", 500)
-            new_commit = _get_head_commit(repo_path)
-
-            changed_files = []
-            returncode, diff_output, _ = _run_git(
-                ["diff", "--name-only", f"{local_commit}..{new_commit}"],
-                cwd=str(repo_path)
-            )
-            if diff_output:
-                changed_files = [f.strip() for f in diff_output.split('\n') if f.strip()]
-
-            return {
-                "previous_commit": local_commit,
-                "current_commit": new_commit,
-                "changed_files": changed_files,
-                "upgraded": True,
-                "message": f"强制更新完成: {local_commit[:8]} -> {new_commit[:8]}"
-            }
 
         # 检查是否有新提交（fetch 远程）
         logger.info("检查 rime-ice 远程更新...")
@@ -128,12 +135,11 @@ def update_rime_ice_repo(force=False):
             raise APIError(f"获取远程信息失败: {stderr[:200]}", 500)
 
         # 获取远程 main 分支 commit
-        returncode, remote_commit_str, stderr = _run_git(
+        returncode, remote_commit, stderr = _run_git(
             ["rev-parse", "origin/main"], cwd=str(repo_path)
         )
         if returncode != 0:
             raise APIError(f"解析远程引用失败: {stderr[:200]}", 500)
-        remote_commit = remote_commit_str
 
         if local_commit == remote_commit:
             logger.info("rime-ice仓库已经是最新版本")
@@ -146,32 +152,9 @@ def update_rime_ice_repo(force=False):
             }
 
         logger.info(f"检测到新版本，开始更新: {local_commit[:8]} -> {remote_commit[:8]}")
-
-        # 执行 pull
-        returncode, stdout, stderr = _run_git(
-            ["pull", "--ff-only"], cwd=str(repo_path)
+        return _pull_with_changes(
+            repo_path, local_commit, "已从 {local} 更新到 {new}"
         )
-        if returncode != 0:
-            logger.error(f"git pull 失败: {stderr}")
-            raise APIError(f"更新失败: {stderr[:200]}", 500)
-        new_commit = _get_head_commit(repo_path)
-
-        # 获取变化文件列表
-        changed_files = []
-        returncode, diff_output, _ = _run_git(
-            ["diff", "--name-only", f"{local_commit}..{new_commit}"],
-            cwd=str(repo_path)
-        )
-        if diff_output:
-            changed_files = [f.strip() for f in diff_output.split('\n') if f.strip()]
-
-        return {
-            "previous_commit": local_commit,
-            "current_commit": new_commit,
-            "changed_files": changed_files,
-            "upgraded": True,
-            "message": f"已从 {local_commit[:8]} 更新到 {new_commit[:8]}"
-        }
 
     except APIError:
         raise
@@ -196,7 +179,6 @@ def clone_rime_ice_repo():
     # 如果目录存在但不是git仓库，删除它
     if repo_path.exists():
         logger.warning(f"目录存在但不是有效的git仓库，将删除: {repo_path}")
-        import shutil
         shutil.rmtree(repo_path)
 
     logger.info(f"克隆rime-ice仓库: {repo_url} (分支: {branch})")
@@ -232,9 +214,6 @@ def copy_to_runtime():
         'rime_ice.userdb',
         'installation.yaml'
     ]
-
-    import shutil
-    from datetime import datetime as dt
 
     def ignore_patterns(path, names):
         ignored = []

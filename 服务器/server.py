@@ -10,7 +10,6 @@ import sys
 import logging
 import shutil
 import atexit
-import secrets
 from datetime import datetime
 from pathlib import Path
 
@@ -22,11 +21,11 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stderr)]
 )
 
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, send_file
 from flask_cors import CORS
 
 from utils.tar_cache import (
-    get_tar_cache_dir, cleanup_stale_files, cleanup_tar_cache
+    cleanup_stale_files, cleanup_tar_cache
 )
 
 # 临时 tar 文件缓存目录，避免 send_file 流式传输时的竞态删除问题。
@@ -39,6 +38,7 @@ cleanup_stale_files()
 atexit.register(cleanup_tar_cache)
 
 from utils.config_loader import config_manager
+from utils.auth import authenticate_request
 from utils.error_handler import (
     success_response, error_response, APIError,
     register_error_handlers
@@ -91,6 +91,25 @@ def setup_logging():
     logger.info(f"日志系统初始化完成，日志级别: {log_level}")
     return logger
 
+
+def send_temp_tar(tar_path, download_name: str):
+    """发送临时 tar 文件，并在响应关闭或异常时删除该临时文件。"""
+    response = send_file(
+        str(tar_path),
+        as_attachment=True,
+        download_name=download_name,
+        mimetype='application/x-tar'
+    )
+
+    @response.call_on_close
+    def cleanup():
+        try:
+            tar_path.unlink()
+        except Exception:
+            pass
+
+    return response
+
 def create_app():
     app = Flask(__name__)
     CORS(app)
@@ -115,14 +134,7 @@ def create_app():
     @app.before_request
     def authenticate():
         # api_token 为空时保持旧行为（无认证）；配置后所有 /api/* 请求必须携带
-        if not request.path.startswith('/api/'):
-            return None
-        expected = config_manager.get("server", "server.api_token", "")
-        if not expected:
-            return None
-        provided = request.headers.get("X-Api-Token", "")
-        if not secrets.compare_digest(provided, expected):
-            return error_response("未授权: X-Api-Token 请求头缺失或不正确", 401)
+        return authenticate_request()
     
     @app.after_request
     def log_response(response):
@@ -340,30 +352,15 @@ def create_app():
     @app.route('/api/sync/get/<device>/tar', methods=['GET'])
     def sync_get_tar(device):
         from utils.sync_manager import sync_manager
-        from flask import send_file
 
         since = request.args.get('since')
         tar_path = None
 
         try:
             tar_path = sync_manager.create_tar(device, since)
-
-            response = send_file(
-                str(tar_path),
-                as_attachment=True,
-                download_name=f"{device}_sync.tar",
-                mimetype='application/x-tar'
-            )
-            @response.call_on_close
-            def cleanup():
-                try:
-                    if tar_path.exists():
-                        tar_path.unlink()
-                except Exception:
-                    pass
-            return response
+            return send_temp_tar(tar_path, f"{device}_sync.tar")
         except APIError as e:
-            if tar_path is not None and tar_path.exists():
+            if tar_path is not None:
                 try:
                     tar_path.unlink()
                 except Exception:
@@ -373,7 +370,6 @@ def create_app():
     @app.route('/api/sync/get/<device>/file/<path:filename>', methods=['GET'])
     def sync_get_file(device, filename):
         from utils.sync_manager import sync_manager
-        from flask import send_file
         
         try:
             file_path = sync_manager.get_file_content(device, filename)
@@ -411,7 +407,6 @@ def create_app():
     @app.route('/api/dict/get/tar', methods=['GET'])
     def dict_get_tar():
         from utils.dict_manager import dict_manager
-        from flask import send_file
 
         category = request.args.get('category')
         since = request.args.get('since')
@@ -419,23 +414,9 @@ def create_app():
 
         try:
             tar_path = dict_manager.create_tar(category, since)
-
-            response = send_file(
-                str(tar_path),
-                as_attachment=True,
-                download_name=f"rime_dicts_{category or 'all'}.tar",
-                mimetype='application/x-tar'
-            )
-            @response.call_on_close
-            def cleanup():
-                try:
-                    if tar_path.exists():
-                        tar_path.unlink()
-                except Exception:
-                    pass
-            return response
+            return send_temp_tar(tar_path, f"rime_dicts_{category or 'all'}.tar")
         except APIError as e:
-            if tar_path is not None and tar_path.exists():
+            if tar_path is not None:
                 try:
                     tar_path.unlink()
                 except Exception:
@@ -445,7 +426,6 @@ def create_app():
     @app.route('/api/dict/get/file/<path:file_name>', methods=['GET'])
     def dict_get_file(file_name):
         from utils.dict_manager import dict_manager
-        from flask import send_file
         
         category = request.args.get('category')
         
@@ -478,7 +458,6 @@ def create_app():
     @app.route('/api/full_sync/download', methods=['GET'])
     def full_sync_download():
         from utils.full_sync_manager import full_sync_manager
-        from flask import send_file
 
         exclude = request.args.get('exclude')
         since = request.args.get('since')
@@ -489,23 +468,9 @@ def create_app():
                 exclude_patterns=full_sync_manager.get_exclude_patterns(exclude) if exclude else None,
                 since=since
             )
-
-            response = send_file(
-                str(tar_path),
-                as_attachment=True,
-                download_name="rime_full_config.tar",
-                mimetype='application/x-tar'
-            )
-            @response.call_on_close
-            def cleanup():
-                try:
-                    if tar_path.exists():
-                        tar_path.unlink()
-                except Exception:
-                    pass
-            return response
+            return send_temp_tar(tar_path, "rime_full_config.tar")
         except APIError as e:
-            if tar_path is not None and tar_path.exists():
+            if tar_path is not None:
                 try:
                     tar_path.unlink()
                 except Exception:
