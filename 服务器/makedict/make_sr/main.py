@@ -12,6 +12,7 @@ from sr_api_crawler import (
     fetch_consumable_names,
     fetch_valuable_names,
     fetch_quest_item_names,
+    fetch_place_names,
 )
 
 
@@ -97,9 +98,10 @@ def preprocess_word(word):
     2. 去除（...）及括号本身
     3. 去除「」引号本身，保留内部内容
     4. ，（中文逗号）视为拆分
-    5. ！、：、《》 去除标点本身
+    5. ！、：、《》及 ™/® 商标符号去除
     6. 英文部分去除（仅当词中含中文时）
     7. · / • 只去除点本身（角色名中的·已在 process_role_name 处理）
+    8. 含中文的词去除内部空白；去除首尾残留的 - .（如 雅利洛-VI → 雅利洛）
     """
     results = [word]
 
@@ -129,8 +131,8 @@ def preprocess_word(word):
             new_results.append(w)
     results = [r.strip() for r in new_results if r.strip()]
 
-    # 5. 去除标点！、：、《》
-    results = [re.sub(r"[！、：：《》]", "", w).strip() for w in results]
+    # 5. 去除标点！、：、《》及 ™/® 商标符号（如 苏乐达™热砂海选会场 → 苏乐达热砂海选会场）
+    results = [re.sub(r"[！、：：《》™®]", "", w).strip() for w in results]
     results = [r for r in results if r]
 
     # 6. 英文部分去除
@@ -150,6 +152,19 @@ def preprocess_word(word):
     # 7. 去除 · / •（只去掉点本身）
     results = [w.replace("·", "").replace("•", "").strip() for w in results]
     results = [r for r in results if r]
+
+    # 8. 清理空白与残留分隔符
+    #    含中文的词去除内部空白（如「酣歌海垠」 斯缇科西亚 → 酣歌海垠斯缇科西亚）
+    #    去除首尾残留的 - .（如 雅利洛-VI → 雅利洛- → 雅利洛）
+    new_results = []
+    for w in results:
+        if re.search(r"[\u4e00-\u9fff]", w):
+            w = re.sub(r"\s+", "", w)
+        w = w.strip("-.")
+        w = w.strip()
+        if w:
+            new_results.append(w)
+    results = new_results
 
     return results
 
@@ -211,6 +226,9 @@ def main():
     quest_items = fetch_quest_item_names()
     logging.info(f"共获取到 {len(quest_items)} 个任务道具")
 
+    place_names = fetch_place_names()
+    logging.info(f"共获取到 {len(place_names)} 个地图地名（区域 + 地标）")
+
     others = read_other_words()
 
     # 2. 角色名特殊处理（·及后面内容去除，阮·梅除外）
@@ -219,7 +237,10 @@ def main():
     logging.info(f"角色名预处理后共 {len(roles)} 个")
 
     # 3. 合并所有来源
-    all_words = roles + weapons + relics + upgrade_materials + consumables + valuables + quest_items + others
+    all_words = (
+        roles + weapons + relics + upgrade_materials + consumables + valuables
+        + quest_items + place_names + others
+    )
     logging.info(f"合并后共 {len(all_words)} 个词（未去重、未预处理）")
 
     # 4. 通用预处理（返回列表，可能拆分）
