@@ -19,6 +19,7 @@ DEFAULTS = {
         "retry_count": 3,
         "verify_ssl": False,
         "api_token": "",
+        "sync_all_timeout": 1800,
     },
     "rime": {
         "config_dir": ".",
@@ -173,6 +174,10 @@ class ConfigManager:
     @property
     def retry_count(self) -> int:
         return self.config["server"].get("retry_count", 3)
+
+    @property
+    def sync_all_timeout(self) -> int:
+        return self.config["server"].get("sync_all_timeout", 1800)
 
     @property
     def verify_ssl(self) -> bool:

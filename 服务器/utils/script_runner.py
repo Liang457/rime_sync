@@ -29,6 +29,15 @@ class ScriptRunner:
         self.makedict_path.mkdir(exist_ok=True)
         self.runtime_cn_dicts.mkdir(parents=True, exist_ok=True)
 
+    def check_permission(self, device):
+        """权限检查：只有 trust_users 中的设备可执行脚本。"""
+        if not self.trusted_users:
+            logger.warning("scripts.trusted_users 为空，拒绝执行所有脚本")
+            raise APIError("服务器未配置可执行脚本的设备(trusted_users为空)", 403)
+        if not device or device not in self.trusted_users:
+            logger.warning(f"设备 {device or '(未提供)'} 不在信任列表中，拒绝执行脚本")
+            raise APIError("设备没有执行脚本的权限，需要提供有效的 device 标识", 403)
+
     def run_script(self, script_name, version, device=None, extra_params=None):
         """
         执行自定义词库生成脚本
@@ -48,7 +57,7 @@ class ScriptRunner:
         # 未提供版本时，分配服务器时间（YYYYMMDDHHMMSS）
         if not version:
             version = datetime.now().strftime("%Y%m%d%H%M%S")
-        
+
         # 验证脚本目录和主脚本
         if not script_dir.exists():
             logger.error(f"脚本目录不存在: {script_dir}")
@@ -59,12 +68,7 @@ class ScriptRunner:
             raise APIError(f"脚本 '{script_name}' 缺少主文件 main.py", 404)
         
         # 权限检查：只有信任的设备可以执行脚本
-        if not self.trusted_users:
-            logger.warning("scripts.trusted_users 为空，拒绝执行所有脚本")
-            raise APIError("服务器未配置可执行脚本的设备(trusted_users为空)", 403)
-        if not device or device not in self.trusted_users:
-            logger.warning(f"设备 {device or '(未提供)'} 不在信任列表中，拒绝执行脚本")
-            raise APIError(f"设备没有执行脚本的权限，需要提供有效的 device 标识", 403)
+        self.check_permission(device)
         
         # 创建临时工作目录
         with tempfile.TemporaryDirectory(prefix=f"rime_makedict_{script_name}_") as temp_dir:

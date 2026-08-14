@@ -58,6 +58,16 @@ def build_parser():
     run_all_parser.add_argument("--dict-line", type=int, default=18,
                                 help="插入行号(默认: 18)")
 
+    remote_sync_parser = subparsers.add_parser(
+        "remote-sync", help="远端批量同步（更新rime-ice + 全部词库脚本）")
+    remote_sync_parser.add_argument("version", nargs="?",
+                                    help="词库版本（可选，缺省时由服务器分配时间版本）")
+    remote_sync_parser.add_argument("--no-force", action="store_true", help="不强制更新rime-ice")
+    remote_sync_parser.add_argument("--no-add-to-dict", action="store_true",
+                                    help="不自动添加到rime_ice.dict.yaml")
+    remote_sync_parser.add_argument("--dict-line", type=int, default=18,
+                                    help="插入行号(默认: 18)")
+
     edit_parser = subparsers.add_parser("edit-file", help="编辑配置文件")
     edit_parser.add_argument("path", help="文件路径")
     edit_parser.add_argument("line", type=int, help="行号")
@@ -95,7 +105,7 @@ def build_parser():
     sync_download_file_parser.add_argument("filename", help="文件名")
     sync_download_file_parser.add_argument("--device", help="设备标识")
 
-    dict_parser = subparsers.add_parser("sync-dict", help="同步配置 (cn_dicts/en_dicts/lua/opencc)")
+    dict_parser = subparsers.add_parser("sync-dict", help="更新词库 (cn_dicts/en_dicts/lua/opencc)")
     dict_parser.add_argument("--category", choices=["cn", "en", "lua", "opencc"], help="配置类别")
 
     dict_info_parser = subparsers.add_parser("dict-info", help="获取词库信息")
@@ -203,6 +213,40 @@ def _run_all_scripts(api, scripts, version, add_to_dict=True, dict_line=18):
     return {"success": success_count, "failed": fail_count}
 
 
+def _report_remote_sync(api, force=True, version=None, add_to_dict=True, dict_line=18):
+    result = api.remote_sync(force=force, version=version,
+                             add_to_dict=add_to_dict, dict_line=dict_line)
+    data = result.get("data", {})
+
+    update = data.get("update", {})
+    if update.get("upgraded"):
+        logger.info(f"rime-ice已更新: {update.get('message', '成功')}")
+    else:
+        logger.info(f"rime-ice已是最新: {update.get('message', '无更新')}")
+
+    if data.get("runtime_copy"):
+        logger.info("已复制rime-ice到runtime目录")
+
+    summary = data.get("summary", {})
+    logger.info(f"脚本执行: {summary.get('success', 0)} 成功, "
+                f"{summary.get('failed', 0)} 失败 (共{summary.get('total', 0)})")
+
+    for s in data.get("scripts", []):
+        if s.get("success"):
+            files = s.get("output_files", [])
+            logger.info(f"  {s.get('script')}: {', '.join(files) if files else '完成'}")
+        else:
+            logger.warning(f"  {s.get('script')} 失败: {s.get('error', '未知错误')}")
+
+    for a in data.get("dict_additions", []):
+        if a.get("status") == "exists":
+            logger.info(f"  {a.get('entry')}: 已存在，跳过")
+        else:
+            logger.info(f"  {a.get('entry')}: 已添加到第{a.get('line')}行")
+
+    return result
+
+
 def _print_sync_info(data):
     devices = data.get("devices", [])
     if devices:
@@ -279,26 +323,42 @@ def show_interactive_menu(config, api):
             print("请确认客户端与服务器在同一局域网内，且服务器已启动")
 
         print("\n请选择操作:")
-        print(" 1. 请求服务器更新 rime-ice 仓库")
-        print(" 2. 执行自定义词库脚本")
-        print(" 3. 同步用户输入词库 (增量)")
-        print(" 4. 同步配置 (cn_dicts/en_dicts/lua/opencc)")
-        print(" 5. 编辑配置文件")
-        print(" 6. 完整同步 (下载/上传)")
-        print(" 7. 查看同步状态")
-        print(" 8. 获取设备列表")
-        print(" 9. 健康检查")
-        print(" 10. 修改配置")
-        print(" 11. 退出")
+        print(" 1. 远端批量同步 (更新rime-ice + 全部词库脚本)")
+        print(" 2. 请求服务器更新 rime-ice 仓库")
+        print(" 3. 执行自定义词库脚本")
+        print(" 4. 同步用户输入词库 (增量)")
+        print(" 5. 更新词库 (cn_dicts/en_dicts/lua/opencc)")
+        print(" 6. 编辑配置文件")
+        print(" 7. 完整同步 (下载/上传)")
+        print(" 8. 查看同步状态")
+        print(" 9. 获取设备列表")
+        print(" 10. 健康检查")
+        print(" 11. 修改配置")
+        print(" 12. 退出")
 
         try:
-            choice = input("\n选择 [1-11]: ").strip()
+            choice = input("\n选择 [1-12]: ").strip()
 
             if choice == "1":
+                force = input("强制更新 rime-ice? (Y/n): ").strip().lower() != 'n'
+                version = input("词库版本 (回车留空由服务器分配): ").strip() or None
+                add_to_dict = input("自动添加到rime_ice.dict.yaml? (Y/n): ").strip().lower() != 'n'
+                dict_line = 18
+                if add_to_dict:
+                    line_input = input(f"插入行号 (默认{dict_line}): ").strip()
+                    if line_input:
+                        try:
+                            dict_line = int(line_input)
+                        except ValueError:
+                            print("无效行号，使用默认值18")
+                            dict_line = 18
+                _report_remote_sync(api, force, version, add_to_dict, dict_line)
+
+            elif choice == "2":
                 force = input("强制更新? (y/N): ").strip().lower() == 'y'
                 _report_update_rime_ice(api, force)
 
-            elif choice == "2":
+            elif choice == "3":
                 print("\n执行自定义词库脚本:")
                 print("  1. 列出可用脚本")
                 print("  2. 执行单个脚本")
@@ -372,7 +432,7 @@ def show_interactive_menu(config, api):
 
                     _run_all_scripts(api, scripts, version, add_to_dict, dict_line)
 
-            elif choice == "3":
+            elif choice == "4":
                 print("\n同步用户输入词库 (增量):")
                 print("  1. 上传 (仅变更文件)")
                 print("  2. 下载 (仅变更文件)")
@@ -391,8 +451,8 @@ def show_interactive_menu(config, api):
                     filename = input("\n文件名 (可选，留空下载全部变更): ").strip() or None
                     sync.sync_userdb(config, api, "download", filename)
 
-            elif choice == "4":
-                print("\n同步配置:")
+            elif choice == "5":
+                print("\n更新词库:")
                 print("  1. 中文词库 (cn_dicts)")
                 print("  2. 英文词库 (en_dicts)")
                 print("  3. Lua 脚本 (lua)")
@@ -403,14 +463,14 @@ def show_interactive_menu(config, api):
                 category = category_map.get(sub_choice)
                 dicts.sync_dicts(config, api, category)
 
-            elif choice == "5":
+            elif choice == "6":
                 path = input("文件路径: ").strip()
                 line = int(input("行号: ").strip())
                 content = input("内容: ").strip()
                 result = api.edit_file(path, line, content)
                 logger.info(f"文件编辑成功: {result.get('data', {})}")
 
-            elif choice == "6":
+            elif choice == "7":
                 print("\n完整同步:")
                 print("  1. 下载 (从服务器获取)")
                 print("  2. 上传 (初始化服务器)")
@@ -425,18 +485,18 @@ def show_interactive_menu(config, api):
                     result = fullsync.upload_full_sync(config, api, file_path, overwrite)
                     logger.info(f"完整配置包上传成功: {result.get('data', {})}")
 
-            elif choice == "7":
+            elif choice == "8":
                 result = api.get_sync_info()
                 _print_sync_info(result.get("data", {}))
 
-            elif choice == "8":
+            elif choice == "9":
                 result = api.get_device_list()
                 _print_device_list(result.get("data", {}))
 
-            elif choice == "9":
+            elif choice == "10":
                 _print_health(api)
 
-            elif choice == "10":
+            elif choice == "11":
                 print("\n修改配置:")
                 print("  1. 查看当前配置")
                 print("  2. 修改服务器URL")
@@ -455,7 +515,7 @@ def show_interactive_menu(config, api):
                         config.config['rime']['config_dir'] = new_dir
                         config.save()
 
-            elif choice == "11":
+            elif choice == "12":
                 print("再见！")
                 break
             else:
@@ -524,6 +584,15 @@ def _dispatch_command(args, config, api):
 
         return _run_all_scripts(
             api, scripts, args.version,
+            add_to_dict=not getattr(args, 'no_add_to_dict', False),
+            dict_line=getattr(args, 'dict_line', 18),
+        )
+
+    elif command == "remote-sync":
+        return _report_remote_sync(
+            api,
+            force=not getattr(args, 'no_force', False),
+            version=args.version,
             add_to_dict=not getattr(args, 'no_add_to_dict', False),
             dict_line=getattr(args, 'dict_line', 18),
         )

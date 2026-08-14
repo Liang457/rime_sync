@@ -15,9 +15,11 @@ class APIClient:
         self.config = config
         self.session = requests.Session()
 
-    def _with_retry(self, url: str, action: str, request_fn, on_error=None):
-        """带重试的 HTTP 请求。action 用于日志前缀；on_error 在每次失败时调用（用于清理）。"""
-        for attempt in range(1, self.config.retry_count + 1):
+    def _with_retry(self, url: str, action: str, request_fn, on_error=None, retries: Optional[int] = None):
+        """带重试的 HTTP 请求。action 用于日志前缀；on_error 在每次失败时调用（用于清理）。
+        retries 缺省时使用配置值；显式传 1 可禁用重试。"""
+        retry_count = retries if retries is not None else self.config.retry_count
+        for attempt in range(1, retry_count + 1):
             try:
                 response = request_fn()
                 response.raise_for_status()
@@ -26,9 +28,9 @@ class APIClient:
             except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
                 if on_error:
                     on_error()
-                if attempt < self.config.retry_count:
+                if attempt < retry_count:
                     wait = 2 ** attempt
-                    logger.warning(f"{action}失败 (尝试 {attempt}/{self.config.retry_count})，{wait}秒后重试: {e}")
+                    logger.warning(f"{action}失败 (尝试 {attempt}/{retry_count})，{wait}秒后重试: {e}")
                     time.sleep(wait)
                     continue
                 raise APIError(f"{action}失败，已达最大重试次数: {url}") from e
@@ -43,11 +45,11 @@ class APIClient:
                 except Exception:
                     pass
                 # 服务器瞬时错误（5xx）也纳入重试
-                if status_code >= 500 and attempt < self.config.retry_count:
+                if status_code >= 500 and attempt < retry_count:
                     if on_error:
                         on_error()
                     wait = 2 ** attempt
-                    logger.warning(f"服务器错误 {status_code} (尝试 {attempt}/{self.config.retry_count})，{wait}秒后重试")
+                    logger.warning(f"服务器错误 {status_code} (尝试 {attempt}/{retry_count})，{wait}秒后重试")
                     time.sleep(wait)
                     continue
                 if on_error:
@@ -64,16 +66,19 @@ class APIClient:
                     on_error()
                 raise APIError(f"{action}失败: {e}") from e
 
-    def _request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
+    def _request(self, method: str, endpoint: str, timeout: Optional[float] = None,
+                 retries: Optional[int] = None, **kwargs) -> requests.Response:
         url = f"{self.config.server_url}{endpoint}"
-        kwargs.setdefault("timeout", self.config.timeout)
+        kwargs.setdefault("timeout", self.config.timeout if timeout is None else timeout)
         kwargs.setdefault("verify", self.config.verify_ssl)
         if self.config.api_token:
             headers = dict(kwargs.get("headers") or {})
             headers["X-Api-Token"] = self.config.api_token
             kwargs["headers"] = headers
 
-        return self._with_retry(url, "请求", lambda: self.session.request(method, url, **kwargs))
+        return self._with_retry(
+            url, "请求", lambda: self.session.request(method, url, **kwargs), retries=retries
+        )
 
     def _request_json(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
         return self._request(method, endpoint, **kwargs).json()
@@ -246,6 +251,18 @@ class APIClient:
 
     def copy_rime_ice_to_runtime(self) -> Dict[str, Any]:
         return self._request_json("POST", "/api/rime_ice/copy_to_runtime")
+
+    def remote_sync(self, force: bool = True, version: Optional[str] = None,
+                    add_to_dict: bool = True, dict_line: int = 18) -> Dict[str, Any]:
+        logger.info("发起远端批量同步（更新rime-ice + 全部词库脚本）...")
+        data = {"device": self.config.device_name, "force": force,
+                "add_to_dict": add_to_dict, "dict_line": dict_line}
+        if version:
+            data["version"] = version
+        return self._request_json(
+            "POST", "/api/remote_sync",
+            json=data, timeout=self.config.sync_all_timeout, retries=1,
+        )
 
     def list_scripts(self) -> Dict[str, Any]:
         logger.info("获取可用脚本列表...")

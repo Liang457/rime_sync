@@ -210,6 +210,32 @@ def create_app():
         from utils.rime_ice_manager import copy_to_runtime as copy_runtime
         result = copy_runtime()
         return success_response(result, "已复制rime-ice文件到runtime目录")
+
+    @app.route('/api/remote_sync', methods=['POST'])
+    def remote_sync():
+        from utils.remote_sync import run_remote_sync
+
+        if not request.is_json:
+            return error_response("请求必须是JSON格式", 400)
+
+        data = request.get_json(silent=True) or {}
+        device = data.get('device')
+        version = data.get('version')
+        force = data.get('force', True)
+        add_to_dict = data.get('add_to_dict', True)
+        dict_line = data.get('dict_line', 18)
+
+        if not device:
+            return error_response("缺少必要参数: device", 400)
+
+        try:
+            result = run_remote_sync(
+                device=device, version=version, force=force,
+                add_to_dict=add_to_dict, dict_line=dict_line,
+            )
+            return success_response(result, "远端批量同步完成")
+        except APIError as e:
+            return error_response(e.message, e.code, e.details)
     
     @app.route('/api/file/edit', methods=['POST'])
     def edit_file():

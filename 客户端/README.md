@@ -7,7 +7,8 @@
 ## 功能特性
 
 - **交互式 CLI**：无参数运行时提供菜单驱动的交互界面，操作简单直观
-- **命令行模式**：支持 22 个子命令，适合脚本化、定时任务等场景
+- **命令行模式**：支持 23 个子命令，适合脚本化、定时任务等场景
+- **远端批量同步**：一键完成「更新 rime-ice + 复制 runtime + 批量运行词库脚本 + 自动插入词库」完整流程
 - **rime-ice 仓库更新**：请求服务器拉取最新的 rime-ice 源码
 - **自定义词库脚本**：远程触发服务器上的词库生成脚本（单个/批量），自动插入词库到配置
 - **配置哈希增量同步**：按类别（cn/en/lua/opencc）通过 SHA3-256 哈希对比实现增量同步
@@ -109,19 +110,20 @@ Rime 配置目录: C:\Users\Username\AppData\Roaming\Rime
 ✓ 服务器连接正常
 
 请选择操作:
- 1. 请求服务器更新 rime-ice 仓库
- 2. 执行自定义词库脚本（单个/全部列出/批量执行）
- 3. 同步用户输入词库（哈希增量）
- 4. 同步配置 (cn/en/lua/opencc/全部)
- 5. 编辑配置文件
- 6. 完整同步 (下载/上传)
- 7. 查看同步状态
- 8. 设备列表
- 9. 健康检查
- 10. 修改配置
- 11. 退出
+ 1. 远端批量同步 (更新rime-ice + 全部词库脚本)
+ 2. 请求服务器更新 rime-ice 仓库
+ 3. 执行自定义词库脚本（单个/全部列出/批量执行）
+ 4. 同步用户输入词库（哈希增量）
+ 5. 更新词库 (cn/en/lua/opencc/全部)
+ 6. 编辑配置文件
+ 7. 完整同步 (下载/上传)
+ 8. 查看同步状态
+ 9. 设备列表
+ 10. 健康检查
+ 11. 修改配置
+ 12. 退出
 
-选择 [1-11]:
+选择 [1-12]:
 ```
 
 ### 命令行模式（适合自动化）
@@ -138,6 +140,12 @@ python cli.py status
 # 更新 rime-ice（可加 --force 强制更新）
 python cli.py update-rime-ice
 
+# 远端批量同步（更新rime-ice + 复制runtime + 全部词库脚本 + 自动插入词库）
+python cli.py remote-sync                     # 默认强制更新 rime-ice
+python cli.py remote-sync 6.5.1               # 指定版本号
+python cli.py remote-sync --no-force          # 不强制更新
+python cli.py remote-sync --no-add-to-dict    # 不自动插入 rime_ice.dict.yaml
+
 # 运行自定义词库脚本（version 可选，缺省时由服务器分配时间版本）
 python cli.py run-script yuanshen 6.5.1              # 单个（自动添加词库）
 python cli.py run-script yuanshen 6.5.1 --no-add-to-dict  # 不自动添加
@@ -150,7 +158,7 @@ python cli.py list-scripts                           # 列出可用脚本
 python cli.py sync-userdb --action upload            # 上传本机词库
 python cli.py sync-userdb --action download          # 下载其他设备词库
 
-# 同步配置（哈希增量）
+# 更新词库（哈希增量）
 python cli.py sync-dict                              # 同步全部 (cn/en/lua/opencc)
 python cli.py sync-dict --category cn                # 仅同步中文词库
 python cli.py sync-dict --category lua               # 同步 lua 脚本
@@ -179,6 +187,7 @@ python cli.py interactive
 |------|------|
 | `status` | 获取服务器状态 |
 | `update-rime-ice` | 请求更新 rime-ice 仓库 |
+| `remote-sync [version]` | 远端批量同步（更新rime-ice + 复制runtime + 全部词库脚本 + 自动插入词库；默认强制更新，可用 `--no-force`/`--no-add-to-dict`/`--dict-line` 调整） |
 | `run-script <name> [version]` | 执行单个词库脚本（自动添加到 dict.yaml；version 缺省时由服务器分配） |
 | `run-all-scripts [version]` | 批量执行全部词库脚本 |
 | `list-scripts` | 列出服务器可用脚本 |
@@ -190,7 +199,7 @@ python cli.py interactive
 | `sync-info` | 查看用户词库同步信息 |
 | `sync-download-tar` | 下载用户词库 tar 包 |
 | `sync-download-file <filename>` | 下载单个用户词库文件 |
-| `sync-dict` | 同步配置（cn/en/lua/opencc，哈希增量） |
+| `sync-dict` | 更新词库（cn/en/lua/opencc，哈希增量） |
 | `dict-info` | 查看词库信息 |
 | `dict-download-tar` | 下载词库 tar 包 |
 | `dict-download-file <filename>` | 下载单个词库文件 |
@@ -207,7 +216,7 @@ python cli.py interactive
 
 ```
 客户端/
-├── cli.py                   # CLI 入口（22子命令 + 交互菜单）
+├── cli.py                   # CLI 入口（23子命令 + 交互菜单）
 ├── core/                    # 核心逻辑模块库
 │   ├── __init__.py
 │   ├── config.py            # 配置管理器
@@ -223,7 +232,6 @@ python cli.py interactive
 ├── client_config.json       # 客户端配置文件（自动创建）
 ├── run_win.ps1              # Windows 快速启动脚本
 ├── 快速同步.ps1              # 快速同步脚本
-├── 远端同步.ps1              # 远端批量同步脚本
 └── venv/                    # Python 虚拟环境
 ```
 

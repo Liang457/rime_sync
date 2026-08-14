@@ -62,10 +62,11 @@ python cli.py
 
 ```bash
 python cli.py status                              # 服务器状态
+python cli.py remote-sync                         # 远端批量同步（更新rime-ice + 全部词库脚本）
 python cli.py sync-userdb --action upload         # 上传用户词库（哈希增量）
 python cli.py sync-userdb --action download       # 下载用户词库（哈希增量）
-python cli.py sync-dict --category cn             # 同步中文词库
-python cli.py sync-dict --category lua            # 同步 lua 脚本
+python cli.py sync-dict --category cn             # 更新中文词库
+python cli.py sync-dict --category lua            # 更新 lua 脚本
 python cli.py update-rime-ice                     # 更新 rime-ice
 python cli.py run-script <name> <version>         # 单个脚本（自动添加词库）
 python cli.py run-all-scripts <version>           # 批量脚本
@@ -96,7 +97,7 @@ rime-sync/
 │   ├── sync/                 # 各设备用户输入词库
 │   └── backups/              # 定期备份
 ├── 客户端/                    # Python CLI 客户端
-│   ├── cli.py                # CLI 入口（22子命令 + 交互菜单）
+│   ├── cli.py                # CLI 入口（23子命令 + 交互菜单）
 │   ├── core/                 # 核心逻辑模块
 │   │   ├── config.py         # 配置管理器
 │   │   ├── api.py            # HTTP API 客户端
@@ -124,6 +125,7 @@ rime-sync/
 
 ## 最近更新
 
+- **远端批量同步内化**: 新增 `POST /api/remote_sync` 端点与 `remote-sync` 命令，将原 `远端同步.ps1` 的「更新 rime-ice + 批量词库脚本」流程内化为服务端原子化流水线（含 dict 自动插入去重），独立脚本已移除
 - **客户端模块化重构**: 拆分单体脚本为 `core/` 模块库 + `cli.py` 薄 CLI 层
 - **哈希增量同步**: 用户词库按 SHA3-256 diff 仅传输变更文件；配置通过 SyncState + since 参数实现增量下载
 - **新增命令**: `run-all-scripts`（批量脚本执行）、`list-scripts`（列出可用脚本）
