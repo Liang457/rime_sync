@@ -2,7 +2,7 @@ import argparse
 import logging
 import os
 import re
-import time
+from datetime import datetime
 
 from ba_api_crawler import (
     fetch_student_names,
@@ -26,7 +26,7 @@ def setup_logging():
 
 def get_version():
     """
-    从命令行参数获取版本名，未提供时用当前整数时间戳作为版本名。
+    从命令行参数获取版本名，未提供时用当前时间（YYYYMMDDHHMMSS）作为版本名。
     使用 parse_known_args 避免 argparse 遇到 --help 等参数时触发 SystemExit。
     """
     parser = argparse.ArgumentParser(description="生成蔚蓝档案词库 ba.dict.yaml")
@@ -34,12 +34,12 @@ def get_version():
         "version",
         nargs="?",
         default=None,
-        help="词库版本名（可选，默认为当前时间戳）",
+        help="词库版本名（可选，默认为当前时间）",
     )
     args, _ = parser.parse_known_args()
     if args.version:
         return args.version
-    return str(int(time.time()))
+    return datetime.now().strftime("%Y%m%d%H%M%S")
 
 
 def read_other_words(filepath="other.txt"):

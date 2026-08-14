@@ -110,10 +110,12 @@ class APIClient:
         logger.info("请求更新rime-ice仓库...")
         return self._request_json("POST", "/api/rime_ice/update", json={"force": force})
 
-    def run_script(self, script_name: str, version: str,
+    def run_script(self, script_name: str, version: Optional[str] = None,
                    extra_params: Optional[Dict] = None) -> Dict[str, Any]:
         logger.info(f"运行词库生成脚本: {script_name}")
-        data = {"version": version, "device": self.config.device_name}
+        data = {"device": self.config.device_name}
+        if version:
+            data["version"] = version
         if extra_params:
             data["extra_params"] = extra_params
         return self._request_json("POST", f"/api/makedict/run/{script_name}", json=data)

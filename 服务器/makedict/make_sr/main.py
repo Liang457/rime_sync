@@ -2,7 +2,7 @@ import argparse
 import logging
 import os
 import re
-import time
+from datetime import datetime
 
 from sr_api_crawler import (
     fetch_role_names,
@@ -28,24 +28,24 @@ def setup_logging():
 def get_version():
     """
     解析命令行参数获取版本名。
-    若未提供参数或解析失败，则使用当前时间戳作为 fallback。
+    若未提供参数或解析失败，则使用当前时间（YYYYMMDDHHMMSS）作为 fallback。
     """
     parser = argparse.ArgumentParser(description="生成星穹铁道词库 sr.dict.yaml")
     parser.add_argument(
         "version",
         nargs="?",
         default=None,
-        help="词库版本名（可选，默认为当前时间戳）",
+        help="词库版本名（可选，默认为当前时间）",
     )
     try:
         args = parser.parse_args()
     except SystemExit:
-        logging.warning("命令行参数解析失败，使用 time.time() 作为版本名")
-        return str(time.time())
+        logging.warning("命令行参数解析失败，使用当前时间作为版本名")
+        return datetime.now().strftime("%Y%m%d%H%M%S")
 
     if args.version:
         return args.version
-    return str(time.time())
+    return datetime.now().strftime("%Y%m%d%H%M%S")
 
 
 def read_other_words(filepath="other.txt"):

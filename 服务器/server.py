@@ -257,9 +257,6 @@ def create_app():
         device = data.get('device')
         extra_params = data.get('extra_params', {})
         
-        if not version:
-            return error_response("缺少必要参数: version", 400)
-        
         try:
             result = script_runner.run_script(script_name, version, device, extra_params)
             return success_response(result, "脚本执行成功")

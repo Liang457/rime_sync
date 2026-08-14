@@ -42,7 +42,7 @@ def build_parser():
 
     script_parser = subparsers.add_parser("run-script", help="运行自定义词库脚本")
     script_parser.add_argument("script_name", help="脚本名称")
-    script_parser.add_argument("version", help="词库版本")
+    script_parser.add_argument("version", nargs="?", help="词库版本（可选，缺省时由服务器分配时间版本）")
     script_parser.add_argument("--extra", help="额外参数（JSON格式）")
     script_parser.add_argument("--no-add-to-dict", action="store_true",
                                help="不自动添加到rime_ice.dict.yaml")
@@ -52,7 +52,7 @@ def build_parser():
     subparsers.add_parser("list-scripts", help="列出可用自定义词库脚本")
 
     run_all_parser = subparsers.add_parser("run-all-scripts", help="执行全部自定义词库脚本")
-    run_all_parser.add_argument("version", help="词库版本")
+    run_all_parser.add_argument("version", nargs="?", help="词库版本（可选，缺省时由服务器分配时间版本）")
     run_all_parser.add_argument("--no-add-to-dict", action="store_true",
                                 help="不自动添加到rime_ice.dict.yaml")
     run_all_parser.add_argument("--dict-line", type=int, default=18,
@@ -332,10 +332,7 @@ def show_interactive_menu(config, api):
                         print("未输入脚本名称")
                         continue
 
-                    version = input("词库版本: ").strip()
-                    if not version:
-                        print("未输入版本")
-                        continue
+                    version = input("词库版本 (回车留空由服务器分配): ").strip() or None
 
                     add_to_dict = input("自动添加到rime_ice.dict.yaml? (Y/n): ").strip().lower() != 'n'
                     dict_line = 18
@@ -360,10 +357,7 @@ def show_interactive_menu(config, api):
                         continue
 
                     print(f"\n将执行 {len(scripts)} 个脚本: {', '.join(scripts)}")
-                    version = input("词库版本: ").strip()
-                    if not version:
-                        print("未输入版本")
-                        continue
+                    version = input("词库版本 (回车留空由服务器分配): ").strip() or None
 
                     add_to_dict = input("自动添加到rime_ice.dict.yaml? (Y/n): ").strip().lower() != 'n'
                     dict_line = 18

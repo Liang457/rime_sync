@@ -9,9 +9,11 @@ import errno
 from pathlib import Path
 import time
 import signal
+from datetime import datetime
 
 from utils.config_loader import config_manager
 from utils.error_handler import APIError
+from utils.hash_utils import compute_dict_body_hash
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,10 @@ class ScriptRunner:
         """
         script_dir = self.makedict_path / script_name
         main_script = script_dir / "main.py"
+        
+        # 未提供版本时，分配服务器时间（YYYYMMDDHHMMSS）
+        if not version:
+            version = datetime.now().strftime("%Y%m%d%H%M%S")
         
         # 验证脚本目录和主脚本
         if not script_dir.exists():
@@ -138,6 +144,15 @@ class ScriptRunner:
                 for dict_file in dict_files:
                     target_file = self.runtime_cn_dicts / dict_file.name
 
+                    # 若目标文件已存在，比较正文内容（剔除 YAML 头部）
+                    if target_file.exists():
+                        if compute_dict_body_hash(dict_file) == compute_dict_body_hash(target_file):
+                            file_size = target_file.stat().st_size
+                            total_size += file_size
+                            moved_files.append({"name": dict_file.name, "size": file_size, "status": "unchanged"})
+                            logger.info(f"词库内容一致，沿用已有文件: {dict_file.name}")
+                            continue
+
                     file_size = dict_file.stat().st_size
                     total_size += file_size
 
@@ -153,7 +168,7 @@ class ScriptRunner:
                         else:
                             raise
 
-                    moved_files.append({"name": dict_file.name, "size": file_size})
+                    moved_files.append({"name": dict_file.name, "size": file_size, "status": "updated"})
 
                     logger.info(f"词库文件已移动: {dict_file.name} -> {target_file}")
 

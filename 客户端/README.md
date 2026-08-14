@@ -138,10 +138,12 @@ python cli.py status
 # 更新 rime-ice（可加 --force 强制更新）
 python cli.py update-rime-ice
 
-# 运行自定义词库脚本
+# 运行自定义词库脚本（version 可选，缺省时由服务器分配时间版本）
 python cli.py run-script yuanshen 6.5.1              # 单个（自动添加词库）
 python cli.py run-script yuanshen 6.5.1 --no-add-to-dict  # 不自动添加
+python cli.py run-script yuanshen                    # 不传版本（服务器分配）
 python cli.py run-all-scripts 6.5.1                  # 批量执行
+python cli.py run-all-scripts                        # 批量执行（服务器分配版本）
 python cli.py list-scripts                           # 列出可用脚本
 
 # 同步用户输入词库（哈希增量对比，仅传输变更文件）
@@ -177,8 +179,8 @@ python cli.py interactive
 |------|------|
 | `status` | 获取服务器状态 |
 | `update-rime-ice` | 请求更新 rime-ice 仓库 |
-| `run-script <name> <version>` | 执行单个词库脚本（自动添加到 dict.yaml） |
-| `run-all-scripts <version>` | 批量执行全部词库脚本 |
+| `run-script <name> [version]` | 执行单个词库脚本（自动添加到 dict.yaml；version 缺省时由服务器分配） |
+| `run-all-scripts [version]` | 批量执行全部词库脚本 |
 | `list-scripts` | 列出服务器可用脚本 |
 | `edit-file <path> <line> <content>` | 编辑服务器上的配置文件 |
 | `upload-config <file>` | 上传 `*.custom.yaml` 配置文件 |

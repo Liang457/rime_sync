@@ -80,7 +80,7 @@
 - `GET /api/status` - 服务器状态
 - `POST /api/rime_ice/update` - 更新rime-ice仓库
 - `POST /api/file/edit` - 编辑配置文件
-- `POST /api/makedict/run/{script_name}` - 执行词库生成脚本
+- `POST /api/makedict/run/{script_name}` - 执行词库生成脚本（`version` 可选，缺省时分配服务器时间 `YYYYMMDDHHMMSS`；生成词库与已有文件正文一致（SHA3-256，剔除 YAML 头部）时沿用已有文件，响应的 `output_files_detail[].status` 为 `updated`/`unchanged`）
 - `POST /api/config/upload` - 上传配置文件
 - `POST /api/sync/upload/tar` - 上传同步 tar 文件
 - `GET /api/sync/info` - 获取同步信息
