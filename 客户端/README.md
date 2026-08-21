@@ -186,7 +186,8 @@ python cli.py interactive
 | 命令 | 说明 |
 |------|------|
 | `status` | 获取服务器状态 |
-| `update-rime-ice` | 请求更新 rime-ice 仓库 |
+| `update-rime-ice` | 请求更新 rime-ice 仓库（`--force` 强制从上游拉取；仅 commit 实际变化时才重建 runtime） |
+| `copy-to-runtime` | 强制重建 runtime 目录（生成词库自动从备份回填，保留 mtime） |
 | `remote-sync [version]` | 远端批量同步（更新rime-ice + 复制runtime + 全部词库脚本 + 自动插入词库；默认强制更新，可用 `--no-force`/`--no-add-to-dict`/`--dict-line` 调整） |
 | `run-script <name> [version]` | 执行单个词库脚本（自动添加到 dict.yaml；version 缺省时由服务器分配） |
 | `run-all-scripts [version]` | 批量执行全部词库脚本 |

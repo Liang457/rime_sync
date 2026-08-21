@@ -156,6 +156,11 @@ class ScriptRunner:
                             moved_files.append({"name": dict_file.name, "size": file_size, "status": "unchanged"})
                             logger.info(f"词库内容一致，沿用已有文件: {dict_file.name}")
                             continue
+                        status = "updated"
+                    else:
+                        # 目标缺失（如 runtime 刚重建），无法比对，视为新建
+                        logger.debug(f"目标文件不存在，跳过比对直接写入: {target_file}")
+                        status = "created"
 
                     file_size = dict_file.stat().st_size
                     total_size += file_size
@@ -172,15 +177,22 @@ class ScriptRunner:
                         else:
                             raise
 
-                    moved_files.append({"name": dict_file.name, "size": file_size, "status": "updated"})
+                    moved_files.append({"name": dict_file.name, "size": file_size, "status": status})
 
                     logger.info(f"词库文件已移动: {dict_file.name} -> {target_file}")
+
+                status_counts = {"unchanged": 0, "updated": 0, "created": 0}
+                for f in moved_files:
+                    if f["status"] in status_counts:
+                        status_counts[f["status"]] += 1
 
                 # 记录执行日志
                 if self.log_execution:
                     logger.info(f"脚本执行成功: {script_name}, 版本: {version}, "
-                               f"耗时: {execution_time:.2f}秒, "
-                               f"生成文件: {', '.join(f['name'] for f in moved_files)}")
+                                f"耗时: {execution_time:.2f}秒, "
+                                f"unchanged: {status_counts['unchanged']}, "
+                                f"updated: {status_counts['updated']}, "
+                                f"created: {status_counts['created']}")
 
                 return {
                     "success": True,
@@ -189,6 +201,9 @@ class ScriptRunner:
                     "execution_time": round(execution_time, 2),
                     "output_files": [f["name"] for f in moved_files],
                     "output_files_detail": moved_files,
+                    "unchanged_count": status_counts["unchanged"],
+                    "updated_count": status_counts["updated"],
+                    "created_count": status_counts["created"],
                     "total_size": total_size,
                     "stdout": stdout[:1000],
                     "stderr": stderr[:500] if stderr else None,

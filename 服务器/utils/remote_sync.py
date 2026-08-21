@@ -1,4 +1,5 @@
 import logging
+import threading
 from pathlib import Path
 
 from utils.config_loader import config_manager
@@ -7,6 +8,10 @@ from utils.rime_ice_manager import update_rime_ice_repo, copy_to_runtime
 from utils.script_runner import script_runner
 
 logger = logging.getLogger(__name__)
+
+# 进程内互斥锁：防止多线程同时触发流水线导致 runtime 目录竞态搬移
+# （仅适用于单进程部署，如 waitress；多进程部署需外部文件锁）
+_remote_sync_lock = threading.Lock()
 
 
 def _dict_name_from_file(fname):
@@ -84,15 +89,25 @@ def run_remote_sync(device, version=None, force=True, add_to_dict=True, dict_lin
     返回:
         聚合结果字典（update / runtime_copy / scripts / dict_additions / summary）
     """
-    # Step A — 权限预检（在任何耗时操作之前 fail-fast）
+    # Step A — 权限预检（在任何耗时操作之前 fail-fast，且不占用流水线锁）
     script_runner.check_permission(device)
 
+    with _remote_sync_lock:
+        return _run_remote_sync_locked(device, version, force, add_to_dict, dict_line)
+
+
+def _run_remote_sync_locked(device, version=None, force=True, add_to_dict=True, dict_line=18):
+    """在持有流水线锁的前提下执行完整同步（由 run_remote_sync 调用）。"""
     result = {
         "update": None,
         "runtime_copy": None,
         "scripts": [],
         "dict_additions": [],
-        "summary": {"total": 0, "success": 0, "failed": 0, "dict_added": 0, "dict_skipped": 0},
+        "summary": {
+            "total": 0, "success": 0, "failed": 0,
+            "dict_added": 0, "dict_skipped": 0,
+            "files_unchanged": 0, "files_updated": 0, "files_created": 0,
+        },
     }
 
     # Step B — 更新 rime-ice
@@ -125,8 +140,13 @@ def run_remote_sync(device, version=None, force=True, add_to_dict=True, dict_lin
                 script_result["success"] = True
                 script_result["version"] = r.get("version", version)
                 script_result["output_files"] = r.get("output_files", [])
+                script_result["output_files_detail"] = r.get("output_files_detail", [])
                 script_result["total_size"] = r.get("total_size", 0)
                 result["summary"]["success"] += 1
+                for detail in script_result["output_files_detail"]:
+                    key = f"files_{detail.get('status', 'updated')}"
+                    if key in result["summary"]:
+                        result["summary"][key] += 1
             except APIError as e:
                 script_result["error"] = e.message
                 result["summary"]["failed"] += 1

@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 
 GIT_TIMEOUT = 120  # git 网络操作超时秒数
 
+# 上游仓库不含、由脚本或用户产生的词库子目录（runtime 重建时需从备份回填）
+GENERATED_DICT_SUBDIRS = ("cn_dicts", "en_dicts")
+
 
 def _run_git(args, cwd=None, timeout=GIT_TIMEOUT):
     """执行 git 命令（带超时），返回 (returncode, stdout, stderr)"""
@@ -73,7 +76,7 @@ def _get_head_commit(repo_path):
 
 
 def _pull_with_changes(repo_path, local_commit, message):
-    """执行 pull --ff-only，并返回变更结果字典。"""
+    """执行 pull --ff-only，并返回变更结果字典（仅 commit 实际变化时 upgraded=True）。"""
     returncode, stdout, stderr = _run_git(
         ["pull", "--ff-only"], cwd=str(repo_path)
     )
@@ -82,20 +85,27 @@ def _pull_with_changes(repo_path, local_commit, message):
         raise APIError(f"更新失败: {stderr[:200]}", 500)
     new_commit = _get_head_commit(repo_path)
 
+    upgraded = new_commit != local_commit
+
     changed_files = []
-    returncode, diff_output, _ = _run_git(
-        ["diff", "--name-only", f"{local_commit}..{new_commit}"],
-        cwd=str(repo_path)
-    )
-    if diff_output:
-        changed_files = [f.strip() for f in diff_output.split('\n') if f.strip()]
+    if upgraded:
+        returncode, diff_output, _ = _run_git(
+            ["diff", "--name-only", f"{local_commit}..{new_commit}"],
+            cwd=str(repo_path)
+        )
+        if diff_output:
+            changed_files = [f.strip() for f in diff_output.split('\n') if f.strip()]
+        msg = message.format(local=local_commit[:8], new=new_commit[:8])
+    else:
+        logger.info("git pull 完成，commit 无变化")
+        msg = "已是最新版本"
 
     return {
         "previous_commit": local_commit,
         "current_commit": new_commit,
         "changed_files": changed_files,
-        "upgraded": True,
-        "message": message.format(local=local_commit[:8], new=new_commit[:8])
+        "upgraded": upgraded,
+        "message": msg
     }
 
 
@@ -197,6 +207,38 @@ def clone_rime_ice_repo():
     }
 
 
+def _restore_generated_dicts(backup_path, dst_path):
+    """从备份 runtime 回填上游仓库不含的词库文件（copy2 保留 mtime）。
+
+    仅回填新 runtime 中不存在的文件，避免覆盖上游更新。
+    返回 (restored, failed)：成功与失败的相对路径列表。
+    """
+    restored = []
+    failed = []
+    for sub in GENERATED_DICT_SUBDIRS:
+        backup_sub = backup_path / sub
+        if not backup_sub.is_dir():
+            continue
+        target_sub = dst_path / sub
+        target_sub.mkdir(parents=True, exist_ok=True)
+        for src_file in backup_sub.rglob("*"):
+            if not src_file.is_file():
+                continue
+            rel = src_file.relative_to(backup_sub)
+            rel_str = f"{sub}/{rel.as_posix()}"
+            dst_file = target_sub / rel
+            if dst_file.exists():
+                continue
+            try:
+                dst_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(src_file), str(dst_file))
+                restored.append(rel_str)
+            except Exception as e:
+                logger.error(f"回填词库文件失败: {src_file} -> {dst_file}, 错误: {e}")
+                failed.append(rel_str)
+    return restored, failed
+
+
 def copy_to_runtime():
     src_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.rime_ice_original")))
     dst_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.runtime")))
@@ -282,16 +324,28 @@ def copy_to_runtime():
         else:
             logger.info("custom_map.json 不存在，跳过自定义替换")
 
-        # 复制成功后清理备份
+        # 回填生成词库（上游仓库不含脚本产物，从备份恢复缺失文件）
+        restored_files = []
+        restore_failed = []
         if backup_tmp is not None and backup_tmp.exists():
-            shutil.rmtree(backup_tmp, ignore_errors=True)
-            logger.info(f"备份已清理: {backup_tmp}")
+            restored_files, restore_failed = _restore_generated_dicts(backup_tmp, dst_path)
+            if restored_files:
+                logger.info(f"已从备份回填生成词库 {len(restored_files)} 个: {', '.join(restored_files)}")
+
+        # 复制成功后清理备份（存在回填失败时保留备份以便人工恢复）
+        if backup_tmp is not None and backup_tmp.exists():
+            if restore_failed:
+                logger.warning(f"有 {len(restore_failed)} 个词库回填失败，保留备份: {backup_tmp}")
+            else:
+                shutil.rmtree(backup_tmp, ignore_errors=True)
+                logger.info(f"备份已清理: {backup_tmp}")
 
         logger.info(f"已复制rime-ice文件到runtime目录: {dst_path}")
         return {
             "success": True,
             "message": "runtime目录已更新",
             "copied_files": "全部文件",
+            "restored_generated_files": restored_files,
             "custom_replacements": {
                 "applied": len(custom_replacements),
                 "skipped": len(custom_skipped),

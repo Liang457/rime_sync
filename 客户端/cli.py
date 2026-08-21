@@ -40,6 +40,9 @@ def build_parser():
     update_parser = subparsers.add_parser("update-rime-ice", help="更新rime-ice仓库")
     update_parser.add_argument("--force", action="store_true", help="强制更新")
 
+    subparsers.add_parser("copy-to-runtime",
+                          help="强制重建runtime目录（生成词库自动从备份回填）")
+
     script_parser = subparsers.add_parser("run-script", help="运行自定义词库脚本")
     script_parser.add_argument("script_name", help="脚本名称")
     script_parser.add_argument("version", nargs="?", help="词库版本（可选，缺省时由服务器分配时间版本）")
@@ -550,6 +553,18 @@ def _dispatch_command(args, config, api):
 
     elif command == "update-rime-ice":
         return _report_update_rime_ice(api, args.force)
+
+    elif command == "copy-to-runtime":
+        result = api.copy_rime_ice_to_runtime()
+        data = result.get("data", {})
+        if data.get("success"):
+            logger.info("runtime目录已重建")
+            restored = data.get("restored_generated_files", [])
+            if restored:
+                logger.info(f"已回填生成词库 {len(restored)} 个: {', '.join(restored)}")
+        else:
+            logger.error(f"runtime重建失败: {data.get('message', '未知错误')}")
+        return data
 
     elif command == "run-script":
         extra_params = json.loads(args.extra) if args.extra else None
