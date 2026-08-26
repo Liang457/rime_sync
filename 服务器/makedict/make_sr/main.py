@@ -71,21 +71,46 @@ def read_other_words(filepath="other.txt"):
     return words
 
 
-def process_role_name(name):
+def process_role_names(names):
     """
-    处理角色名中的分隔符（· / •）：
-    - 去掉 · 或 • 以及后面的所有字符
-    - 例外：阮·梅 不拆分，保留原样
+    角色名特殊处理：
+    对含 · / • / 半角空格 的名字，拆分为多个词条：
+    1. 去分隔符的合并形式（如 知更鸟晴歌）
+    2. 每个分隔部分（如 知更鸟、晴歌）
+
+    示例：
+      知更鸟·晴歌   → 知更鸟晴歌, 知更鸟, 晴歌
+      浮波 柚叶     → 浮波柚叶, 浮波, 柚叶
+      开拓者•存护   → 开拓者存护, 开拓者, 存护
+
+    例外：阮·梅 不拆分（避免产生无用的单字词条），保留原样交由通用预处理去点。
     """
-    # 阮·梅 例外，不拆分
-    if "阮" in name and ("·" in name or "•" in name):
-        return name
-    # 去掉 ·/• 及后面内容
-    if "·" in name:
-        name = name.split("·", 1)[0].strip()
-    elif "•" in name:
-        name = name.split("•", 1)[0].strip()
-    return name
+    results = []
+    for name in names:
+        # 阮·梅 例外，不拆分
+        if "阮" in name and ("·" in name or "•" in name):
+            results.append(name)
+            continue
+
+        # 判断使用哪种分隔符
+        if "·" in name:
+            sep = "·"
+        elif "•" in name:
+            sep = "•"
+        elif " " in name:
+            sep = " "
+        else:
+            results.append(name)
+            continue
+
+        parts = [p.strip() for p in name.split(sep) if p.strip()]
+        # 合并形式
+        joined = name.replace(sep, "").replace(" ", "")
+        results.append(joined)
+        for p in parts:
+            results.append(p)
+
+    return results
 
 
 def preprocess_word(word):
@@ -100,7 +125,7 @@ def preprocess_word(word):
     4. ，（中文逗号）视为拆分
     5. ！、：、《》及 ™/® 商标符号去除
     6. 英文部分去除（仅当词中含中文时）
-    7. · / • 只去除点本身（角色名中的·已在 process_role_name 处理）
+    7. · / • 只去除点本身（角色名中的·已在 process_role_names 处理）
     8. 含中文的词去除内部空白；去除首尾残留的 - .（如 雅利洛-VI → 雅利洛）
     """
     results = [word]
@@ -231,10 +256,10 @@ def main():
 
     others = read_other_words()
 
-    # 2. 角色名特殊处理（·及后面内容去除，阮·梅除外）
-    roles = [process_role_name(r) for r in raw_roles]
+    # 2. 角色名特殊处理（·/•/空格拆分为合并形式+各部分，阮·梅除外）
+    roles = process_role_names(raw_roles)
     roles = [r for r in roles if r]
-    logging.info(f"角色名预处理后共 {len(roles)} 个")
+    logging.info(f"角色名拆分后共 {len(roles)} 个")
 
     # 3. 合并所有来源
     all_words = (
