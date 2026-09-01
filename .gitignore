@@ -15,10 +15,10 @@ logs/
 *.log
 
 # Rime user data (generated at runtime)
-服务器/rime_ice_original/
-服务器/runtime/
-服务器/sync/
-服务器/backups/
+rime_ice_original/
+runtime/
+sync/
+backups/
 
 # Editor / IDE
 .vscode/
@@ -26,9 +26,6 @@ logs/
 *.swp
 *.swo
 *~
-
-# Client config (user-specific, don't overwrite on pull)
-客户端/client_config.json
 
 # AI assistant context files (local only, not part of the repo)
 .claude/
