@@ -3,8 +3,12 @@
 从米游社官方 Wiki API 获取代理人、音擎、邦布、驱动盘、材料等词条名称。
 """
 
-import json
-import urllib.request
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from _shared.net import fetch_mihoyo_channel_titles
 
 BASE_URL = (
     "https://act-api-takumi-static.mihoyo.com/common/blackboard/"
@@ -41,33 +45,7 @@ def _fetch_channel(channel_id):
     返回:
         词条标题列表（保持 API 返回顺序，已去重）
     """
-    url = f"{BASE_URL}?app_sn={APP_SN}&channel_id={channel_id}"
-    req = urllib.request.Request(url, headers=HEADERS)
-
-    with urllib.request.urlopen(req, timeout=30) as response:
-        data = json.loads(response.read().decode("utf-8"))
-
-    if data.get("retcode") != 0:
-        raise RuntimeError(
-            f"API 返回错误: {data.get('message')} (retcode={data.get('retcode')})"
-        )
-
-    ch_list = data["data"]["list"]
-    if not ch_list:
-        return []
-
-    ch_data = ch_list[0]
-    items = ch_data.get("list", [])
-
-    seen = set()
-    titles = []
-    for item in items:
-        title = item["title"]
-        if title and title not in seen:
-            seen.add(title)
-            titles.append(title)
-
-    return titles
+    return fetch_mihoyo_channel_titles(BASE_URL, APP_SN, channel_id, HEADERS)
 
 
 def fetch_agent_names():

@@ -6,9 +6,13 @@
 """
 
 import re
-import time
-import urllib.request
+import sys
+from pathlib import Path
 from urllib.parse import quote
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from _shared.net import fetch_text
 
 URL = "https://mzh.moegirl.org.cn/蔚蓝档案/译名对照表"
 
@@ -18,8 +22,6 @@ HEADERS = {
         "Gecko/20100101 Firefox/153.0"
     ),
 }
-
-RETRY_MAX = 3
 
 _CHINESE_RE = re.compile(r"[一-鿿]")
 
@@ -31,23 +33,7 @@ def fetch_surnames():
     返回:
         [(日文姓, 日文名, 中文全名), ...]
     """
-    req = urllib.request.Request(quote(URL, safe="/:"), headers=HEADERS)
-
-    last_err = None
-    for attempt in range(RETRY_MAX):
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                text = resp.read().decode("utf-8")
-            break
-        except Exception as e:
-            last_err = e
-            if attempt < RETRY_MAX - 1:
-                time.sleep(2 ** (attempt + 1))
-            continue
-    else:
-        raise RuntimeError(
-            f"萌娘百科请求失败（重试 {RETRY_MAX} 次后）: {last_err}"
-        ) from last_err
+    text = fetch_text(quote(URL, safe="/:"), headers=HEADERS, timeout=60)
 
     rows = re.findall(r'<tr[^>]*>(.*?)</tr>', text, re.DOTALL)
     result = []

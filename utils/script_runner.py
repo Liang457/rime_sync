@@ -88,19 +88,21 @@ class ScriptRunner:
             # 构建命令
             logger.info(f"脚本主文件路径: {main_script.resolve()}, 相对路径: {main_script}")
             cmd = [sys.executable, str(main_script), version]
-            
-            # 添加额外参数（通过环境变量或标准输入）
-            env = os.environ.copy()
-            if extra_params:
-                env["RIME_MAKEDICT_PARAMS"] = json.dumps(extra_params)
-            
+
             # 执行脚本
             logger.info(f"执行脚本: {script_name}, 版本: {version}, 工作目录: {temp_script_dir}")
-            
+
             try:
                 # 设置超时
                 start_time = time.time()
-                
+
+                # 将 makedict 根目录注入 PYTHONPATH，使临时目录中的脚本
+                # 可以 import makedict/_shared 下的共享模块（网络库等）
+                env = os.environ.copy()
+                env["PYTHONPATH"] = str(self.makedict_path) + os.pathsep + env.get("PYTHONPATH", "")
+                if extra_params:
+                    env["RIME_MAKEDICT_PARAMS"] = json.dumps(extra_params)
+
                 process = subprocess.Popen(
                     cmd,
                     cwd=temp_script_dir,

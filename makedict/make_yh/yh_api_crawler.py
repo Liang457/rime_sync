@@ -5,15 +5,27 @@
 API 返回层级树结构（JSON 数组），叶子节点 (child=null) 为实际词条。
 """
 
-import json
-import time
-import urllib.request
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from _shared.net import fetch_json
 
 # GameKee Wiki API - 异环项目 (project_id=50442)
 BASE_URL = (
     "https://cdnimg-test.gamekee.com/wiki2.0/pro/50442/"
     "entry/list.json"
 )
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) "
+        "Gecko/20100101 Firefox/153.0"
+    ),
+    "Accept": "application/json",
+    "Referer": "https://www.gamekee.com/",
+}
 
 # 收录的板块 ID（仅收录游戏实体名称，跳过攻略/OST/教程等）
 SECTION_IDS = {
@@ -25,55 +37,10 @@ SECTION_IDS = {
     "异能": 188180,
 }
 
-# 缓存：首次 fetch 后缓存完整 JSON，避免重复请求
-_CACHED_DATA = None
-
-RETRY_MAX = 3
-
 
 def _fetch_json():
-    """获取完整 API 响应（带缓存与重试）。"""
-    global _CACHED_DATA
-    if _CACHED_DATA is not None:
-        return _CACHED_DATA
-
-    req = urllib.request.Request(
-        BASE_URL,
-        headers={
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) "
-                "Gecko/20100101 Firefox/153.0"
-            ),
-            "Accept": "application/json",
-            "Referer": "https://www.gamekee.com/",
-        },
-    )
-
-    last_err = None
-    for attempt in range(RETRY_MAX):
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                raw = resp.read().decode("utf-8")
-        except Exception as e:
-            last_err = e
-            if attempt < RETRY_MAX - 1:
-                time.sleep(2 ** (attempt + 1))  # 2s, 4s, 8s
-            continue
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as e:
-            raise RuntimeError(f"API 返回非 JSON: {e}") from e
-
-        if not isinstance(data, list):
-            raise RuntimeError(f"API 返回格式异常，期望数组，实际: {type(data)}")
-
-        _CACHED_DATA = data
-        return data
-
-    raise RuntimeError(
-        f"API 请求失败（重试 {RETRY_MAX} 次后）: {last_err}"
-    ) from last_err
+    """获取完整 API 响应（缓存/重试/类型校验见 _shared.net.fetch_json）。"""
+    return fetch_json(BASE_URL, headers=HEADERS, expected_type=list)
 
 
 def _extract_leaf_names(nodes):

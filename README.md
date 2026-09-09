@@ -69,7 +69,7 @@ rime_sync/
 ├── DEPLOYMENT.md          # 部署与 API 端点说明
 ├── config/                # JSON 配置
 ├── custom_files/          # custom_map.json 覆盖映射
-├── makedict/              # 自定义词库脚本 make_ba/sr/yh/ys/zzz
+├── makedict/              # 自定义词库脚本 make_ba/sr/yh/ys/zzz，_shared/ 为共享网络库
 ├── utils/                 # 工具模块
 ├── rime_ice_original/     # 上游 rime-ice 克隆（运行时生成）
 ├── runtime/               # 提供给客户端的文件（运行时生成）

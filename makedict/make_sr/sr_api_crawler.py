@@ -4,10 +4,14 @@
 并从米游社星铁交互地图公开 JSON API 获取地图地名（区域名 + 地标名）。
 """
 
-import json
 import logging
 import re
-import urllib.request
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from _shared.net import fetch_json, fetch_mihoyo_channel_titles
 
 BASE_URL = (
     "https://act-api-takumi-static.mihoyo.com/common/blackboard/"
@@ -56,32 +60,7 @@ def _fetch_channel(channel_id):
     返回:
         词条标题列表（保持 API 返回顺序，已去重）
     """
-    url = f"{BASE_URL}?app_sn={APP_SN}&channel_id={channel_id}"
-    req = urllib.request.Request(url, headers=HEADERS)
-
-    with urllib.request.urlopen(req, timeout=30) as response:
-        data = json.loads(response.read().decode("utf-8"))
-
-    if data.get("retcode") != 0:
-        raise RuntimeError(f"API 返回错误: {data.get('message')} (retcode={data.get('retcode')})")
-
-    ch_list = data["data"]["list"]
-    if not ch_list:
-        return []
-
-    ch_data = ch_list[0]
-    items = ch_data.get("list", [])
-
-    # 去重（API 可能返回重复条目，如「开拓者•存护」出现两次）
-    seen = set()
-    titles = []
-    for item in items:
-        title = item["title"]
-        if title and title not in seen:
-            seen.add(title)
-            titles.append(title)
-
-    return titles
+    return fetch_mihoyo_channel_titles(BASE_URL, APP_SN, channel_id, HEADERS)
 
 
 def fetch_role_names():
@@ -136,10 +115,7 @@ def _map_request(endpoint):
         f"{MAP_BASE_URL}{endpoint}?map_id={MAP_ID}&app_sn={MAP_APP_SN}"
         f"&lang={MAP_LANG}&app_version={MAP_APP_VERSION}"
     )
-    req = urllib.request.Request(url, headers=HEADERS)
-
-    with urllib.request.urlopen(req, timeout=60) as response:
-        data = json.loads(response.read().decode("utf-8"))
+    data = fetch_json(url, headers=HEADERS, timeout=60, expected_type=dict)
 
     if data.get("retcode") != 0:
         if data.get("retcode") == -502:

@@ -6,10 +6,13 @@ API 返回层级树结构（JSON 对象包裹），叶子节点 (child=null) 为
 叶子节点含 name_alias 字段（逗号分隔别名），仅保留中文别名。
 """
 
-import json
 import re
-import time
-import urllib.request
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from _shared.net import fetch_json
 
 # GameKee Wiki API - 蔚蓝档案 (pid=23941)
 BASE_URL = "https://www.gamekee.com/v1/entry/treesByPidV1?pid=23941"
@@ -33,58 +36,23 @@ _SECTION_IDS = {
     "礼物": 107816,
 }
 
-# 缓存：首次 fetch 后缓存完整 JSON，避免重复请求
-_CACHED_DATA = None
-
-RETRY_MAX = 3
-
 _CHINESE_RE = re.compile(r"[一-鿿]")
 
 
 def _fetch_json():
-    """获取完整 API 响应（带缓存与重试）。"""
-    global _CACHED_DATA
-    if _CACHED_DATA is not None:
-        return _CACHED_DATA
+    """获取完整 API 响应（缓存/重试/类型校验见 _shared.net.fetch_json）。"""
+    data = fetch_json(BASE_URL, headers=HEADERS, expected_type=dict)
 
-    req = urllib.request.Request(BASE_URL, headers=HEADERS)
+    if data.get("code") != 0:
+        raise RuntimeError(
+            f"API 返回错误: code={data.get('code')}, msg={data.get('msg')}"
+        )
 
-    last_err = None
-    for attempt in range(RETRY_MAX):
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                raw = resp.read().decode("utf-8")
-        except Exception as e:
-            last_err = e
-            if attempt < RETRY_MAX - 1:
-                time.sleep(2 ** (attempt + 1))  # 2s, 4s, 8s
-            continue
+    tree_data = data.get("data")
+    if tree_data is None:
+        raise RuntimeError("API 返回 data 为 null")
 
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as e:
-            raise RuntimeError(f"API 返回非 JSON: {e}") from e
-
-        if not isinstance(data, dict):
-            raise RuntimeError(
-                f"API 返回格式异常，期望 dict，实际: {type(data)}"
-            )
-
-        if data.get("code") != 0:
-            raise RuntimeError(
-                f"API 返回错误: code={data.get('code')}, msg={data.get('msg')}"
-            )
-
-        tree_data = data.get("data")
-        if tree_data is None:
-            raise RuntimeError("API 返回 data 为 null")
-
-        _CACHED_DATA = tree_data
-        return tree_data
-
-    raise RuntimeError(
-        f"API 请求失败（重试 {RETRY_MAX} 次后）: {last_err}"
-    ) from last_err
+    return tree_data
 
 
 def _extract_leaf_names(nodes):
