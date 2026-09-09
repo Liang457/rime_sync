@@ -13,8 +13,8 @@ def edit_file(file_path, line, content, action="insert"):
     参数:
         file_path: 相对于runtime目录的文件路径
         line: 行号（1-based）
-        content: 要插入或替换的内容
-        action: 操作类型，目前仅支持"insert"
+        content: 要插入或替换的内容（delete 时可为 None）
+        action: 操作类型：insert / replace / delete
     
     返回:
         操作结果字典
@@ -46,34 +46,25 @@ def edit_file(file_path, line, content, action="insert"):
         logger.error(f"读取文件失败: {target_path}, 错误: {e}")
         raise APIError(f"读取文件失败: {str(e)}", 500)
     
-    # 验证行号
-    if line < 1 or line > len(lines) + 1:
-        logger.error(f"行号超出范围: {line}, 文件行数: {len(lines)}")
-        raise APIError(f"行号超出范围，有效范围: 1-{len(lines)+1}", 400)
-    
-    # 执行编辑操作
+    # 执行编辑操作（各分支校验各自的行号范围）
     if action == "insert":
-        # 插入新行
+        if line < 1 or line > len(lines) + 1:
+            logger.error(f"行号超出范围: {line}, 文件行数: {len(lines)}")
+            raise APIError(f"行号超出范围，有效范围: 1-{len(lines)+1}", 400)
         lines.insert(line - 1, content + '\n')
         operation = "insert"
-        line_added = line
     elif action == "replace":
-        # 替换指定行
-        if line > len(lines):
+        if line < 1 or line > len(lines):
             logger.error(f"替换行号超出范围: {line}, 文件行数: {len(lines)}")
             raise APIError(f"替换行号超出范围，有效范围: 1-{len(lines)}", 400)
         lines[line - 1] = content + '\n'
         operation = "replace"
-        line_added = line
     elif action == "delete":
-        # 删除指定行
-        if line > len(lines):
+        if line < 1 or line > len(lines):
             logger.error(f"删除行号超出范围: {line}, 文件行数: {len(lines)}")
             raise APIError(f"删除行号超出范围，有效范围: 1-{len(lines)}", 400)
-        deleted_content = lines[line - 1].rstrip('\n')
         del lines[line - 1]
         operation = "delete"
-        line_added = line
     else:
         logger.error(f"不支持的操作类型: {action}")
         raise APIError(f"不支持的操作类型: {action}", 400)
@@ -86,13 +77,13 @@ def edit_file(file_path, line, content, action="insert"):
         logger.error(f"写入文件失败: {target_path}, 错误: {e}")
         raise APIError(f"写入文件失败: {str(e)}", 500)
     
-    logger.info(f"文件编辑成功: {file_path}, 操作: {operation}, 行号: {line_added}")
-    
+    logger.info(f"文件编辑成功: {file_path}, 操作: {operation}, 行号: {line}")
+
     return {
         "success": True,
         "file_path": file_path,
         "operation": operation,
-        "line": line_added,
+        "line": line,
         "total_lines": len(lines),
-        "content_preview": content[:100] + ("..." if len(content) > 100 else "")
+        "content_preview": None if content is None else content[:100] + ("..." if len(content) > 100 else "")
     }

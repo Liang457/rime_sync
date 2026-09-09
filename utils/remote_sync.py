@@ -1,17 +1,12 @@
 import logging
-import threading
 from pathlib import Path
 
 from utils.config_loader import config_manager
 from utils.error_handler import APIError
-from utils.rime_ice_manager import update_rime_ice_repo, copy_to_runtime
+from utils.rime_ice_manager import runtime_lock, update_rime_ice_repo, copy_to_runtime
 from utils.script_runner import script_runner
 
 logger = logging.getLogger(__name__)
-
-# 进程内互斥锁：防止多线程同时触发流水线导致 runtime 目录竞态搬移
-# （仅适用于单进程部署，如 waitress；多进程部署需外部文件锁）
-_remote_sync_lock = threading.Lock()
 
 
 def _dict_name_from_file(fname):
@@ -92,7 +87,7 @@ def run_remote_sync(device, version=None, force=True, add_to_dict=True, dict_lin
     # Step A — 权限预检（在任何耗时操作之前 fail-fast，且不占用流水线锁）
     script_runner.check_permission(device)
 
-    with _remote_sync_lock:
+    with runtime_lock:
         return _run_remote_sync_locked(device, version, force, add_to_dict, dict_line)
 
 

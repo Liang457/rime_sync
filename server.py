@@ -43,6 +43,18 @@ from utils.error_handler import (
     success_response, error_response, APIError,
     register_error_handlers
 )
+from utils.sync_manager import sync_manager
+from utils.dict_manager import dict_manager
+from utils.full_sync_manager import full_sync_manager
+from utils.script_runner import script_runner
+from utils.remote_sync import run_remote_sync
+from utils.config_uploader import handle_config_upload
+from utils.file_editor import edit_file as edit_file_func
+from utils.rime_ice_manager import (
+    get_rime_ice_version,
+    update_rime_ice_repo,
+    copy_to_runtime as copy_runtime,
+)
 
 def setup_logging():
     from logging.handlers import RotatingFileHandler
@@ -153,7 +165,6 @@ def create_app():
     
     @app.route('/api/status', methods=['GET'])
     def api_status():
-        from utils.rime_ice_manager import get_rime_ice_version
         version = get_rime_ice_version()
         
         uptime_seconds = int((datetime.now() - app.config.get('START_TIME', datetime.now())).total_seconds())
@@ -197,7 +208,6 @@ def create_app():
     
     @app.route('/api/rime_ice/update', methods=['POST'])
     def update_rime_ice():
-        from utils.rime_ice_manager import update_rime_ice_repo
         force = False
         if request.is_json:
             data = request.get_json(silent=True) or {}
@@ -207,14 +217,11 @@ def create_app():
     
     @app.route('/api/rime_ice/copy_to_runtime', methods=['POST'])
     def copy_to_runtime():
-        from utils.rime_ice_manager import copy_to_runtime as copy_runtime
         result = copy_runtime()
         return success_response(result, "已复制rime-ice文件到runtime目录")
 
     @app.route('/api/remote_sync', methods=['POST'])
     def remote_sync():
-        from utils.remote_sync import run_remote_sync
-
         if not request.is_json:
             return error_response("请求必须是JSON格式", 400)
 
@@ -239,8 +246,6 @@ def create_app():
     
     @app.route('/api/file/edit', methods=['POST'])
     def edit_file():
-        from utils.file_editor import edit_file as edit_file_func
-        
         if not request.is_json:
             return error_response("请求必须是JSON格式", 400)
         
@@ -269,8 +274,6 @@ def create_app():
     
     @app.route('/api/makedict/run/<script_name>', methods=['POST'])
     def run_makedict_script(script_name):
-        from utils.script_runner import script_runner
-
         # 安全检查：script_name 不能包含路径遍历字符
         if not script_name or '..' in script_name or '/' in script_name or '\\' in script_name or ':' in script_name or '\0' in script_name:
             return error_response("无效的脚本名称", 400)
@@ -282,6 +285,10 @@ def create_app():
         version = data.get('version')
         device = data.get('device')
         extra_params = data.get('extra_params', {})
+
+        # version 会写入词库 YAML 头，仅允许安全字符（缺省时由服务器分配）
+        if version is not None and not re.fullmatch(r'[\w.-]+', str(version)):
+            return error_response("version 仅允许字母、数字、点、下划线、连字符", 400)
         
         try:
             result = script_runner.run_script(script_name, version, device, extra_params)
@@ -291,19 +298,15 @@ def create_app():
     
     @app.route('/api/makedict/list', methods=['GET'])
     def list_makedict_scripts():
-        from utils.script_runner import script_runner
         scripts = script_runner.list_scripts()
         return success_response({"scripts": scripts}, "脚本列表获取成功")
-    
+
     @app.route('/api/config/upload', methods=['POST'])
     def upload_config():
-        from utils.config_uploader import handle_config_upload
         return handle_config_upload(request)
     
     @app.route('/api/sync/upload/tar', methods=['POST'])
     def sync_upload_tar():
-        from utils.sync_manager import sync_manager
-
         if 'file' not in request.files:
             return error_response("没有上传文件", 400)
 
@@ -324,8 +327,6 @@ def create_app():
     
     @app.route('/api/sync/upload/file', methods=['POST'])
     def sync_upload_file():
-        from utils.sync_manager import sync_manager
-        
         if 'file' not in request.files:
             return error_response("没有上传文件", 400)
         
@@ -347,8 +348,6 @@ def create_app():
     
     @app.route('/api/sync/info', methods=['GET'])
     def sync_info():
-        from utils.sync_manager import sync_manager
-        
         device = request.args.get('device')
         since = request.args.get('since')
         
@@ -374,26 +373,16 @@ def create_app():
     
     @app.route('/api/sync/get/<device>/tar', methods=['GET'])
     def sync_get_tar(device):
-        from utils.sync_manager import sync_manager
-
         since = request.args.get('since')
-        tar_path = None
 
         try:
             tar_path = sync_manager.create_tar(device, since)
             return send_temp_tar(tar_path, f"{device}_sync.tar")
         except APIError as e:
-            if tar_path is not None:
-                try:
-                    tar_path.unlink()
-                except Exception:
-                    pass
             return error_response(e.message, e.code, e.details)
     
     @app.route('/api/sync/get/<device>/file/<path:filename>', methods=['GET'])
     def sync_get_file(device, filename):
-        from utils.sync_manager import sync_manager
-        
         try:
             file_path = sync_manager.get_file_content(device, filename)
             return send_file(
@@ -406,8 +395,6 @@ def create_app():
     
     @app.route('/api/device/list', methods=['GET'])
     def device_list():
-        from utils.sync_manager import sync_manager
-        
         try:
             devices = sync_manager.get_device_details()
             return success_response({"devices": devices}, "设备列表获取成功")
@@ -416,8 +403,6 @@ def create_app():
     
     @app.route('/api/dict/info', methods=['GET'])
     def dict_info():
-        from utils.dict_manager import dict_manager
-        
         category = request.args.get('category')  # 'cn' 或 'en'
         since = request.args.get('since')
         
@@ -429,27 +414,17 @@ def create_app():
     
     @app.route('/api/dict/get/tar', methods=['GET'])
     def dict_get_tar():
-        from utils.dict_manager import dict_manager
-
         category = request.args.get('category')
         since = request.args.get('since')
-        tar_path = None
 
         try:
             tar_path = dict_manager.create_tar(category, since)
             return send_temp_tar(tar_path, f"rime_dicts_{category or 'all'}.tar")
         except APIError as e:
-            if tar_path is not None:
-                try:
-                    tar_path.unlink()
-                except Exception:
-                    pass
             return error_response(e.message, e.code, e.details)
     
     @app.route('/api/dict/get/file/<path:file_name>', methods=['GET'])
     def dict_get_file(file_name):
-        from utils.dict_manager import dict_manager
-        
         category = request.args.get('category')
         
         try:
@@ -464,8 +439,6 @@ def create_app():
     
     @app.route('/api/full_sync/info', methods=['GET'])
     def full_sync_info():
-        from utils.full_sync_manager import full_sync_manager
-        
         exclude = request.args.get('exclude')
         since = request.args.get('since')
         
@@ -480,11 +453,8 @@ def create_app():
     
     @app.route('/api/full_sync/download', methods=['GET'])
     def full_sync_download():
-        from utils.full_sync_manager import full_sync_manager
-
         exclude = request.args.get('exclude')
         since = request.args.get('since')
-        tar_path = None
 
         try:
             tar_path = full_sync_manager.create_tar(
@@ -493,17 +463,10 @@ def create_app():
             )
             return send_temp_tar(tar_path, "rime_full_config.tar")
         except APIError as e:
-            if tar_path is not None:
-                try:
-                    tar_path.unlink()
-                except Exception:
-                    pass
             return error_response(e.message, e.code, e.details)
     
     @app.route('/api/full_sync/upload', methods=['POST'])
     def full_sync_upload():
-        from utils.full_sync_manager import full_sync_manager
-
         if 'file' not in request.files:
             return error_response("没有上传文件", 400)
 

@@ -3,6 +3,7 @@ import shutil
 import logging
 import json
 import subprocess
+import threading
 from datetime import datetime as dt
 from pathlib import Path
 
@@ -12,6 +13,11 @@ from utils.error_handler import APIError
 logger = logging.getLogger(__name__)
 
 GIT_TIMEOUT = 120  # git 网络操作超时秒数
+
+# runtime 目录搬移/重建的互斥锁：copy_to_runtime 与 remote_sync 流水线共用，
+# RLock 允许流水线持有期间在同线程内重入 copy_to_runtime
+# （仅适用于单进程部署，如 waitress；多进程部署需外部文件锁）
+runtime_lock = threading.RLock()
 
 # 上游仓库不含、由脚本或用户产生的词库子目录（runtime 重建时需从备份回填）
 GENERATED_DICT_SUBDIRS = ("cn_dicts", "en_dicts")
@@ -144,9 +150,10 @@ def update_rime_ice_repo(force=False):
             logger.error(f"git fetch 失败: {stderr}")
             raise APIError(f"获取远程信息失败: {stderr[:200]}", 500)
 
-        # 获取远程 main 分支 commit
+        # 获取远程分支 commit（分支名来自配置，勿硬编码）
+        branch = config_manager.get("server", "git.rime_ice_branch", "main")
         returncode, remote_commit, stderr = _run_git(
-            ["rev-parse", "origin/main"], cwd=str(repo_path)
+            ["rev-parse", f"origin/{branch}"], cwd=str(repo_path)
         )
         if returncode != 0:
             raise APIError(f"解析远程引用失败: {stderr[:200]}", 500)
@@ -240,6 +247,12 @@ def _restore_generated_dicts(backup_path, dst_path):
 
 
 def copy_to_runtime():
+    """复制 rime-ice 到 runtime。全程持 runtime_lock，避免并发搬移 runtime 目录。"""
+    with runtime_lock:
+        return _copy_to_runtime_locked()
+
+
+def _copy_to_runtime_locked():
     src_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.rime_ice_original")))
     dst_path = Path(config_manager.resolve_path(config_manager.get("server", "paths.runtime")))
     backup_tmp = None
@@ -248,32 +261,23 @@ def copy_to_runtime():
         logger.error(f"源目录不存在: {src_path}")
         raise APIError("rime-ice原始仓库不存在", 404)
 
-    # 排除的目录和文件
-    exclude_patterns = [
+    # 排除的目录和文件：按名称精确匹配任意层级的路径段（避免子串误伤，
+    # 如 "build" 不应命中 "rebuild.yaml"）
+    exclude_names = {
         '.git',
         '.github',
         'build',
         'rime_ice.userdb',
         'installation.yaml'
-    ]
+    }
 
     def ignore_patterns(path, names):
-        ignored = []
-        for name in names:
-            full_path = Path(path) / name
-            rel_path = full_path.relative_to(src_path) if full_path.is_relative_to(src_path) else Path(name)
-
-            for pattern in exclude_patterns:
-                if pattern in str(rel_path):
-                    ignored.append(name)
-                    break
-
-        return ignored
+        return [name for name in names if name in exclude_names]
 
     try:
         # 如果目标目录已存在，先重命名为备份（而非直接删除）
         if dst_path.exists():
-            backup_name = f"{dst_path.name}_backup_{dt.now().strftime('%Y%m%d_%H%M%S')}"
+            backup_name = f"{dst_path.name}_backup_{dt.now().strftime('%Y%m%d_%H%M%S_%f')}"
             backup_tmp = dst_path.parent / backup_name
             shutil.move(str(dst_path), str(backup_tmp))
             logger.info(f"旧的runtime目录已备份: {backup_tmp}")

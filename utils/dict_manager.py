@@ -5,7 +5,7 @@ from typing import Dict
 
 from utils.config_loader import config_manager
 from utils.error_handler import APIError
-from utils.hash_utils import compute_file_hash
+from utils.hash_utils import compute_file_hash_cached
 from utils.archive_utils import parse_since, create_tar_file
 from utils.path_utils import safe_resolve
 
@@ -54,33 +54,29 @@ class DictManager:
             
             files = []
             for file_path in cat_path.rglob('*'):
-                if file_path.is_file():
-                    # 检查文件扩展名
-                    if self.allowed_extensions and not any(file_path.name.endswith(ext) for ext in self.allowed_extensions):
-                        continue
-                    
-                    # 检查时间筛选
-                    if since_time:
-                        file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                        if file_mtime < since_time:
-                            continue
-                    
-                    # 计算相对路径
-                    rel_path = file_path.relative_to(cat_path)
-                    
-                    # 计算文件哈希
-                    file_hash = compute_file_hash(file_path)
-                    
-                    file_info = {
-                        "path": str(rel_path),
-                        "size": file_path.stat().st_size,
-                        "modified": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
-                        "hash": file_hash,
-                        "type": "file"
-                    }
-                    
-                    files.append(file_info)
-                    total_size += file_info["size"]
+                if not file_path.is_file():
+                    continue
+
+                # 检查文件扩展名
+                if self.allowed_extensions and not any(file_path.name.endswith(ext) for ext in self.allowed_extensions):
+                    continue
+
+                st = file_path.stat()
+
+                # 检查时间筛选
+                if since_time and datetime.fromtimestamp(st.st_mtime) < since_time:
+                    continue
+
+                file_info = {
+                    "path": file_path.relative_to(cat_path).as_posix(),
+                    "size": st.st_size,
+                    "modified": datetime.fromtimestamp(st.st_mtime).isoformat(),
+                    "hash": compute_file_hash_cached(file_path),
+                    "type": "file"
+                }
+
+                files.append(file_info)
+                total_size += file_info["size"]
             
             # 按路径排序
             files.sort(key=lambda x: x["path"])
@@ -95,45 +91,31 @@ class DictManager:
     def get_file_content(self, file_name: str, category: str = None) -> Path:
         """
         获取词库文件路径
-        
+
         参数:
             file_name: 文件名（可能包含相对路径）
-            category: 类别，'cn' 或 'en'，为None时自动判断
-        
+            category: 类别，'cn' 或 'en'，为None时自动判断（先 cn 后 en）
+
         返回:
             文件路径
         """
-        # 确定文件所在目录
         if category == 'cn':
-            base_path = self.cn_dicts_path
-            file_path = self.cn_dicts_path / file_name
+            base_paths = [self.cn_dicts_path]
         elif category == 'en':
-            base_path = self.en_dicts_path
-            file_path = self.en_dicts_path / file_name
+            base_paths = [self.en_dicts_path]
         else:
-            # 自动判断：先在cn_dicts中查找，然后在en_dicts中查找
-            cn_path = self.cn_dicts_path / file_name
-            en_path = self.en_dicts_path / file_name
-            
-            if cn_path.exists():
-                base_path = self.cn_dicts_path
-                file_path = cn_path
-            elif en_path.exists():
-                base_path = self.en_dicts_path
-                file_path = en_path
-            else:
-                raise APIError(f"文件不存在: {file_name}", 404)
-        
-        # 安全检查：防止路径遍历
-        try:
-            file_path = safe_resolve(base_path, file_name)
-        except ValueError:
-            raise APIError("无效的文件路径", 400)
-        
-        if not file_path.exists():
-            raise APIError(f"文件不存在: {file_name}", 404)
-        
-        return file_path
+            base_paths = [self.cn_dicts_path, self.en_dicts_path]
+
+        # 先做路径安全校验再探测存在，避免通过 404/400 差异探测目录外路径
+        for base_path in base_paths:
+            try:
+                file_path = safe_resolve(base_path, file_name)
+            except ValueError:
+                raise APIError("无效的文件路径", 400)
+            if file_path.exists():
+                return file_path
+
+        raise APIError(f"文件不存在: {file_name}", 404)
     
     def create_tar(self, category: str = None, since: str = None) -> Path:
         """

@@ -8,8 +8,8 @@ from typing import Dict, Set
 
 from utils.config_loader import config_manager
 from utils.error_handler import APIError
-from utils.hash_utils import compute_file_hash
-from utils.archive_utils import parse_since, create_tar_file
+from utils.hash_utils import compute_file_hash, compute_file_hash_cached
+from utils.archive_utils import parse_since, create_tar_file, save_upload
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ class FullSyncManager:
                 "path": str(rel_path).replace('\\', '/'),
                 "size": file_path.stat().st_size,
                 "modified": datetime.fromtimestamp(file_path.stat().st_mtime).isoformat(),
-                "hash": compute_file_hash(file_path),
+                "hash": compute_file_hash_cached(file_path),
                 "type": "file"
             }
             
@@ -135,14 +135,7 @@ class FullSyncManager:
             temp_path = Path(temp_dir)
             tar_path = temp_path / "uploaded.tar"
 
-            try:
-                # 保存tar文件
-                tar_content.save(str(tar_path))
-            except Exception:
-                # 如果save方法不可用，直接写入
-                tar_content.seek(0)
-                with open(tar_path, 'wb') as f:
-                    f.write(tar_content.read())
+            save_upload(tar_content, tar_path)
 
             # 验证哈希（如果提供了）
             if hash_value:
@@ -165,18 +158,16 @@ class FullSyncManager:
             except Exception:
                 raise APIError("上传的文件不是有效的tar文件", 400)
 
-            # 备份现有runtime目录（必须成功才能继续）
-            backup_path = None
-            if overwrite:
-                backup_dir = Path(config_manager.resolve_path(config_manager.get("server", "paths.backups")))
-                backup_dir.mkdir(parents=True, exist_ok=True)
-                backup_path = backup_dir / f"runtime_backup_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
-                try:
-                    shutil.copytree(self.runtime_path, backup_path)
-                    logger.info(f"已创建runtime目录备份: {backup_path}")
-                except Exception as e:
-                    logger.error(f"创建备份失败，中止操作: {e}")
-                    raise APIError(f"创建备份失败，无法安全执行覆盖操作: {str(e)}", 500)
+            # 备份现有runtime目录（必须成功才能继续；函数入口已强制 overwrite=true）
+            backup_dir = Path(config_manager.resolve_path(config_manager.get("server", "paths.backups")))
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            backup_path = backup_dir / f"runtime_backup_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+            try:
+                shutil.copytree(self.runtime_path, backup_path)
+                logger.info(f"已创建runtime目录备份: {backup_path}")
+            except Exception as e:
+                logger.error(f"创建备份失败，中止操作: {e}")
+                raise APIError(f"创建备份失败，无法安全执行覆盖操作: {str(e)}", 500)
 
             try:
                 # 清空现有runtime目录（排除隐藏文件/目录）

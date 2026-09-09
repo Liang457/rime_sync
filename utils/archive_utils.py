@@ -1,5 +1,6 @@
-"""tar 打包与 since 时间筛选的公共工具，供各 Manager 复用。"""
+"""tar 打包、since 时间筛选与上传保存的公共工具，供各 Manager 复用。"""
 
+import shutil
 import tarfile
 from datetime import datetime
 from pathlib import Path
@@ -7,6 +8,17 @@ from typing import Callable, Optional
 
 from utils.error_handler import APIError
 from utils.hash_utils import safe_parse_iso
+
+
+def save_upload(file_storage, dest: Path) -> None:
+    """保存上传文件对象到 dest：优先 FileStorage.save，不可用时回退流式直写。"""
+    try:
+        file_storage.save(str(dest))
+    except Exception:
+        file_storage.seek(0)
+        stream = getattr(file_storage, 'stream', file_storage)
+        with open(dest, 'wb') as f:
+            shutil.copyfileobj(stream, f)
 
 
 def parse_since(since: Optional[str]) -> Optional[datetime]:

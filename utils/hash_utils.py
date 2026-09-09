@@ -6,6 +6,11 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 HASH_ALGORITHM = "sha3-256"
+CHUNK_SIZE = 64 * 1024
+
+# info 接口的哈希缓存：键为 (路径, mtime_ns, size)，文件未变则直接命中。
+# 文件被任何方式修改后键变化会自动重算，无需显式失效。
+_hash_cache = {}
 
 
 def compute_file_hash(filepath: Path) -> str:
@@ -13,13 +18,28 @@ def compute_file_hash(filepath: Path) -> str:
     hash_obj = hashlib.sha3_256()
     try:
         with open(filepath, 'rb') as f:
-            for chunk in iter(lambda: f.read(8192), b''):
+            for chunk in iter(lambda: f.read(CHUNK_SIZE), b''):
                 hash_obj.update(chunk)
         return f"{HASH_ALGORITHM}:{hash_obj.hexdigest()}"
     except Exception as e:
         logger.error(f"计算文件哈希失败: {filepath}, 错误: {e}")
         from utils.error_handler import APIError
         raise APIError(f"计算文件哈希失败: {str(e)}", 500)
+
+
+def compute_file_hash_cached(filepath: Path) -> str:
+    """带 (mtime_ns, size) 缓存的 compute_file_hash。
+
+    供 info 类接口对同一目录树反复全量取哈希使用；上传等需要精确哈希的
+    场景请直接用 compute_file_hash。"""
+    st = filepath.stat()
+    key = (str(filepath), st.st_mtime_ns, st.st_size)
+    cached = _hash_cache.get(key)
+    if cached is not None:
+        return cached
+    digest = compute_file_hash(filepath)
+    _hash_cache[key] = digest
+    return digest
 
 
 def extract_dict_body(filepath: Path) -> bytes:

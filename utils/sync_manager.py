@@ -4,6 +4,7 @@ import tarfile
 import shutil
 import errno
 import threading
+import tempfile
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict
@@ -11,7 +12,7 @@ from typing import List, Dict
 from utils.config_loader import config_manager
 from utils.error_handler import APIError
 from utils.hash_utils import compute_file_hash, safe_parse_iso
-from utils.archive_utils import parse_since, create_tar_file
+from utils.archive_utils import parse_since, create_tar_file, save_upload
 from utils.path_utils import safe_resolve
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ class SyncManager:
             return False
         if device_name in ('.', '..'):
             return False
-        for char in ('/', '\\', '\0'):
+        for char in ('/', '\\', '\0', ':'):
             if char in device_name:
                 return False
         if device_name.startswith('.') or device_name.startswith('~'):
@@ -75,21 +76,24 @@ class SyncManager:
             logger.error(f"保存清单文件失败: {manifest_path}, 错误: {e}")
             raise APIError(f"保存清单文件失败: {str(e)}", 500)
     
+    @staticmethod
+    def _file_info(filepath: Path) -> Dict:
+        """构建清单条目"""
+        return {
+            "hash": compute_file_hash(filepath),
+            "size": filepath.stat().st_size,
+            "modified": datetime.now().isoformat(),
+            "type": "file"
+        }
+
     def update_file_info(self, device_name: str, filename: str, filepath: Path):
         """更新文件信息到清单"""
         with self._manifest_lock:
             manifest = self.load_manifest(device_name)
-            
-            file_info = {
-                "hash": compute_file_hash(filepath),
-                "size": filepath.stat().st_size,
-                "modified": datetime.now().isoformat(),
-                "type": "file"
-            }
-            
+            file_info = self._file_info(filepath)
             manifest[filename] = file_info
             self.save_manifest(device_name, manifest)
-        
+
         return file_info
     
     def upload_file(self, device_name: str, filename: str, file_content) -> Dict:
@@ -141,39 +145,29 @@ class SyncManager:
         device_path.mkdir(parents=True, exist_ok=True)
 
         # 创建临时目录
-        import tempfile
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             tar_path = temp_path / "upload.tar"
 
-            # 保存tar文件
-            try:
-                tar_content.save(str(tar_path))
-            except Exception:
-                # 如果save失败，尝试直接写入
-                tar_content.seek(0)
-                with open(tar_path, 'wb') as f:
-                    f.write(tar_content.read())
+            save_upload(tar_content, tar_path)
 
-            # 解压前预检：限制解压后总大小（防tar炸弹）和文件数量
+            # 边遍历边校验（防tar炸弹）：超限立即中止，不做任何解压
             try:
                 with tarfile.open(tar_path, 'r') as tar_ref:
-                    file_members = [m for m in tar_ref.getmembers() if m.isfile()]
-                    total_size = sum(m.size for m in file_members)
-                if total_size > self.max_total_size_mb * 1024 * 1024:
-                    raise APIError(f"tar解压后总大小超过限制({self.max_total_size_mb}MB)", 400)
-                if len(file_members) > self.max_files_per_device:
-                    raise APIError(f"tar内文件数量超过限制({self.max_files_per_device})", 400)
+                    total_size = 0
+                    file_count = 0
+                    for member in tar_ref:
+                        if not member.isfile():
+                            continue
+                        total_size += member.size
+                        file_count += 1
+                        if total_size > self.max_total_size_mb * 1024 * 1024:
+                            raise APIError(f"tar解压后总大小超过限制({self.max_total_size_mb}MB)", 400)
+                        if file_count > self.max_files_per_device:
+                            raise APIError(f"tar内文件数量超过限制({self.max_files_per_device})", 400)
+                    tar_ref.extractall(path=temp_path, filter='data')
             except APIError:
                 raise
-            except Exception as e:
-                logger.error(f"tar预检失败: {e}")
-                raise APIError(f"解压tar文件失败: {str(e)}", 400)
-
-            # 解压tar文件
-            try:
-                with tarfile.open(tar_path, 'r') as tar_ref:
-                    tar_ref.extractall(path=temp_path, filter='data')
             except Exception as e:
                 logger.error(f"解压tar文件失败: {e}")
                 raise APIError(f"解压tar文件失败: {str(e)}", 400)
@@ -206,12 +200,7 @@ class SyncManager:
                                 raise
 
                         # 更新清单（收集到内存，最后一次性写入）
-                        file_info = {
-                            "hash": compute_file_hash(target_path),
-                            "size": target_path.stat().st_size,
-                            "modified": datetime.now().isoformat(),
-                            "type": "file"
-                        }
+                        file_info = self._file_info(target_path)
                         manifest[filename] = file_info
                         uploaded_files.append({
                             "name": filename,
@@ -265,17 +254,19 @@ class SyncManager:
             # 获取所有文件信息
             files = []
             total_size = 0
-            
-            # 首先确保清单包含所有实际文件
-            for file_path in device_path.rglob('*'):
-                if file_path.is_file() and file_path.name != self.manifest_filename:
-                    rel_path = file_path.relative_to(device_path)
-                    filename = str(rel_path).replace('\\', '/')
-                    
+
+            # 回填清单中缺失的实际文件：单锁内一次载入、内存累积、一次写回
+            with self._manifest_lock:
+                new_entries = {}
+                for file_path in device_path.rglob('*'):
+                    if not file_path.is_file() or file_path.name == self.manifest_filename:
+                        continue
+                    filename = str(file_path.relative_to(device_path)).replace('\\', '/')
                     if filename not in manifest:
-                        # 更新清单
-                        self.update_file_info(device_name, filename, file_path)
-                        manifest = self.load_manifest(device_name)  # 重新加载
+                        new_entries[filename] = self._file_info(file_path)
+                if new_entries:
+                    manifest.update(new_entries)
+                    self.save_manifest(device_name, manifest)
             
             # 返回清单中的所有文件（应用 since 过滤）
             for filename, info in manifest.items():
