@@ -1,11 +1,12 @@
 """面向客户端的同步 API。所有响应 JSON（除文件/tar 下载）。
 
-认证：settings.api_token 非空时，除 /api/health 外都必须带 X-Api-Token 头。
+认证：token_ok(got) 为假时（除 /api/health 外）一律 401；token 支持多个，
+在控制台设备页管理。
 """
 from __future__ import annotations
 
-import hmac
 import io
+import re
 import shutil
 import tarfile
 import time
@@ -14,6 +15,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request, send_file
 
 from .safe_path import safe_device_name, safe_relpath
+from .services import rime_ice
 from .services.publish import publish_files
 from .services.store import FileStore
 from .services.upstream import BaseManager
@@ -24,17 +26,16 @@ SERVER_VERSION = "0.1.0"
 
 def api_bp(
     store: FileStore, userdb: UserDbStore, upstream: BaseManager,
-    api_token: str, data_root: Path,
+    token_ok, data_root: Path,
 ) -> Blueprint:
     bp = Blueprint("api", __name__, url_prefix="/api")
     started = time.time()
 
     @bp.before_request
     def _auth():
-        if request.path == "/api/health" or not api_token:
+        if request.path == "/api/health":
             return None
-        got = request.headers.get("X-Api-Token", "")
-        if not hmac.compare_digest(got, api_token):
+        if not token_ok(request.headers.get("X-Api-Token", "")):
             return jsonify({"ok": False, "error": "缺少或错误的 X-Api-Token"}), 401
         return None
 
@@ -113,7 +114,13 @@ def api_bp(
             files.append((rel, f.stream.read()))
         results = publish_files(store, files, source=source, version=version,
                                 detail=f"publish {len(files)} 个文件")
-        return jsonify({"ok": True, "revision": store.revision, "results": results})
+        # cn_dicts 词库发布后自动联动 rime_ice.dict.yaml 的 import_tables
+        linkage = None
+        if any(re.fullmatch(r"cn_dicts/.+\.dict\.yaml", r["path"]) and
+               r["status"] != "unchanged" for r in results):
+            linkage = rime_ice.sync_import_tables(store)
+        return jsonify({"ok": True, "revision": store.revision, "results": results,
+                        "rime_ice": linkage})
 
     # ---- 用户词库 -----------------------------------------------------------
 

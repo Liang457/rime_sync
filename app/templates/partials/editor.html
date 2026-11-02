@@ -1,6 +1,6 @@
 <div class="editor-head">
   <div>
-    <div class="mono" style="font-size:14px">{{ path }}</div>
+    <div class="mono md-typescale-body-medium">{{ path }}</div>
     <div class="muted small">
       <span class="chip b-{{ meta.source }}">{{ meta.source }}</span>
       版本 {{ meta.version or '—' }} · {{ meta.size | human_size }} · <span class="mono">{{ meta.sha3[:20] }}</span>
@@ -10,16 +10,18 @@
 </div>
 <form hx-post="/configs/save" hx-target="#editor" hx-swap="innerHTML">
   <input type="hidden" name="path" value="{{ path }}">
-  <textarea class="editor" name="content" spellcheck="false">{{ content }}</textarea>
+  <md-outlined-text-field class="editor-field" type="textarea" name="content"
+                          rows="22" spellcheck="false">{{ content }}</md-outlined-text-field>
   <div class="form-row" style="margin-top:12px">
-    <button class="btn" type="submit">保存</button>
-    <a class="btn text" href="/files/download/{{ path }}">下载</a>
+    <md-filled-button type="submit">保存</md-filled-button>
+    <md-text-button href="/files/download/{{ path }}">下载</md-text-button>
     <span class="muted small">保存即写入文件库并更新 manifest（sha3 变化 → 设备下次同步拉取）</span>
   </div>
 </form>
 <form class="upload-overwrite" hx-post="/configs/upload" hx-encoding="multipart/form-data"
       hx-target="#editor" hx-swap="innerHTML">
   <input type="hidden" name="path" value="{{ path }}">
-  <input type="file" name="file" onchange="this.form.requestSubmit()">
+  <input type="file" name="file" onchange="this.form.requestSubmit()"
+         class="file-input-plain">
   <span class="muted small">或选择本地文件直接覆盖此文件</span>
 </form>

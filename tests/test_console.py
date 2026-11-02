@@ -16,12 +16,13 @@ def toast_of(resp) -> str:
 
 
 def upload_file(client, rel, content, prefix="", **form):
-    return client.post("/files/upload", data={
+    """走新 JSON 上传流程；prefix 传 'cn_dicts' 等目录名。"""
+    data = {
         "files": (io.BytesIO(content), rel.rsplit("/", 1)[-1]),
         "prefix": prefix,
-        "prefix_f": "all", "source_f": "all", "q_f": "",
         **form,
-    }, content_type="multipart/form-data")
+    }
+    return client.post("/files/upload", data=data, content_type="multipart/form-data")
 
 
 # ---- 页面 -----------------------------------------------------------------
@@ -40,20 +41,52 @@ def test_pages_render(env, page):
 
 def test_upload_and_table(env):
     app, client, root = env
-    r = upload_file(client, "zzz.dict.yaml", b"ENTRY\t100", prefix="cn_dicts",
-                    version="3.3", source="rime_dict")
-    assert r.status_code == 200
-    assert "cn_dicts/zzz.dict.yaml".encode() in r.data  # 返回的表格局部里出现
+    r = upload_file(client, "zzz.dict.yaml", b"ENTRY\t100", prefix="cn_dicts")
+    j = r.get_json()
+    assert j["ok"] is True
+    assert j["saved"][0]["path"] == "cn_dicts/zzz.dict.yaml"
+    assert j["conflicts"] == []
     manifest = json.loads((root / "store" / "manifest.json").read_text("utf-8"))
-    assert manifest["files"]["cn_dicts/zzz.dict.yaml"]["source"] == "rime_dict"
+    assert manifest["files"]["cn_dicts/zzz.dict.yaml"]["source"] == "upload"
 
 
-def test_upload_without_files_shows_error_toast(env):
+def test_upload_without_files_shows_error(env):
     app, client, root = env
-    r = client.post("/files/upload", data={"prefix_f": "all", "source_f": "all",
-                                           "q_f": ""},
-                    content_type="multipart/form-data")
+    r = client.post("/files/upload", data={}, content_type="multipart/form-data")
+    assert r.status_code == 400
     assert "没有选择文件" in toast_of(r)
+
+
+def test_upload_same_name_asks_then_replace(env):
+    app, client, root = env
+    upload_file(client, "a.yaml", b"v1")
+    # 第二次上传同名 → 不落盘，报告冲突
+    r = upload_file(client, "a.yaml", b"v2")
+    j = r.get_json()
+    assert j["conflicts"] == ["a.yaml"] and j["saved"] == []
+    assert (root / "store" / "files" / "a.yaml").read_bytes() == b"v1"
+    # 确认批量替换 → 落盘
+    r = upload_file(client, "a.yaml", b"v2", replace="1")
+    j = r.get_json()
+    assert j["conflicts"] == [] and j["saved"][0]["status"] == "updated"
+    assert (root / "store" / "files" / "a.yaml").read_bytes() == b"v2"
+
+
+def test_upload_cn_dict_updates_rime_ice(env):
+    app, client, root = env
+    store = app.extensions["store"]
+    from app.services.store import AddItem
+
+    store.add_many([AddItem("rime_ice.dict.yaml", b"import_tables:\n  - 8105\n",
+                            source="base")])
+    upload_file(client, "zzz.dict.yaml", b"E\t1", prefix="cn_dicts")
+    content = store.get_path("rime_ice.dict.yaml").read_text("utf-8")
+    assert "- zzz" in content and "- 8105" in content
+    # 删除词库 → 联动移除
+    r = client.post("/files/delete", data={"path": "cn_dicts/zzz.dict.yaml"})
+    assert "已同步 rime_ice.dict.yaml" in toast_of(r)
+    content = store.get_path("rime_ice.dict.yaml").read_text("utf-8")
+    assert "- zzz" not in content and "- 8105" in content
 
 
 def test_delete_via_console(env):
@@ -155,6 +188,32 @@ def test_base_git_error_surfaces(env, monkeypatch):
     monkeypatch.setattr(upstream, "run_git", boom)
     r = client.post("/base/update", data={})
     assert "失败" in toast_of(r)
+
+
+# ---- API token 管理 -------------------------------------------------------
+
+
+def test_token_create_and_revoke(env):
+    app, client, root = env
+    r = client.post("/devices/tokens/create", data={"label": "手机"})
+    assert "已生成" in toast_of(r)
+    settings = app.extensions["settings"]
+    assert len(settings.tokens) == 1
+    tok = settings.tokens[0]
+    assert tok["label"] == "手机" and tok["token"].startswith("rs_")
+    # 设备页能看到 token
+    assert tok["token"].encode() in client.get("/devices").data
+    # 吊销
+    r = client.post("/devices/tokens/delete", data={"token": tok["token"]})
+    assert "已吊销" in toast_of(r)
+    assert settings.tokens == []
+
+
+def test_token_file_persisted(env):
+    app, client, root = env
+    client.post("/devices/tokens/create", data={"label": "pad"})
+    cfg = json.loads((root / "config" / "server.json").read_text("utf-8"))
+    assert cfg["server"]["tokens"][0]["label"] == "pad"
 
 
 # ---- 登录 -----------------------------------------------------------------

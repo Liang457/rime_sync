@@ -8,9 +8,10 @@
       <td>{{ d.size | human_size }}</td>
       <td class="muted">{{ d.last_push or '从未' }}</td>
       <td class="actions">
-        <button class="btn danger small" hx-post="/devices/delete"
-                hx-vals='{"device":"{{ d.device }}"}' hx-target="#devices-table" hx-swap="innerHTML"
-                hx-confirm="删除设备 {{ d.device }} 的全部快照？（设备下次 push 会重新注册）">删除</button>
+        <md-text-button class="error-text danger-action"
+                data-post="/devices/delete" data-vals='{"device":"{{ d.device }}"}'
+                data-refresh="devicesUpdated"
+                data-confirm="删除设备 {{ d.device }} 的全部快照？（设备下次 push 会重新注册）">删除</md-text-button>
       </td>
     </tr>
   {% else %}

@@ -48,6 +48,38 @@ def test_token_required_when_set(tokened_env):
     assert client.get("/api/health").status_code == 200  # health 永远开放
 
 
+def test_multiple_tokens_all_accepted(env):
+    app, client, root = env
+    settings = app.extensions["settings"]
+    t1 = settings.add_token("phone")
+    t2 = settings.add_token("pad")
+    for t in (t1, t2):
+        assert client.get("/api/manifest",
+                          headers={"X-Api-Token": t["token"]}).status_code == 200
+    assert client.get("/api/manifest").status_code == 401
+    assert client.get("/api/manifest",
+                      headers={"X-Api-Token": t2["token"][:10]}).status_code == 401
+    settings.remove_token(t1["token"])
+    assert client.get("/api/manifest",
+                      headers={"X-Api-Token": t1["token"]}).status_code == 401
+
+
+def test_publish_links_rime_ice(env):
+    app, client, root = env
+    store = app.extensions["store"]
+    from app.services.store import AddItem
+
+    store.add_many([AddItem("rime_ice.dict.yaml",
+                            b"import_tables:\n  - 8105\n", source="base")])
+    r = publish(client, "cn_dicts/new.dict.yaml", b"X", source="rime_dict")
+    j = r.get_json()
+    assert j["rime_ice"]["changed"] is True
+    assert "- new" in store.get_path("rime_ice.dict.yaml").read_text("utf-8")
+    # 重复发布 unchanged → 不再触发联动
+    r = publish(client, "cn_dicts/new.dict.yaml", b"X", source="rime_dict")
+    assert r.get_json()["rime_ice"] is None
+
+
 # ---- manifest 与下载 ------------------------------------------------------
 
 

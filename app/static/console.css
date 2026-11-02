@@ -1,6 +1,7 @@
-/* rime_server 控制台组件层：只消费 material-theme/*.css 提供的 --md-sys-color-* token。
-   主题 = <html> 根类名（.light / .dark / × -medium-contrast / -high-contrast），
-   本文件不写死任何颜色。 */
+/* rime_server 控制台样式层。
+   颜色全部来自 material-theme/*.css 的 --md-sys-color-* token（浅/深跟随系统）；
+   控件是官方 @material/web 组件，这里只做：布局、表格、chips、token→组件映射。
+   不写死任何颜色。 */
 
 * { box-sizing: border-box; }
 
@@ -9,14 +10,75 @@ body {
   margin: 0;
   background: var(--md-sys-color-surface);
   color: var(--md-sys-color-on-surface);
-  font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-family: "Roboto", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .mono { font-family: Consolas, "JetBrains Mono", monospace; font-size: 12.5px; }
 .muted { color: var(--md-sys-color-on-surface-variant); }
 .small { font-size: 12px; }
-
 a { color: var(--md-sys-color-primary); }
+
+/* ---- @material/web 组件 token 映射（官方 theming 方式） ---------------- */
+
+md-filled-button {
+  --md-filled-button-container-color: var(--md-sys-color-primary);
+  --md-filled-button-label-text-color: var(--md-sys-color-on-primary);
+}
+md-outlined-button {
+  --md-outlined-button-label-text-color: var(--md-sys-color-primary);
+  --md-outlined-button-outline-color: var(--md-sys-color-outline);
+}
+md-text-button {
+  --md-text-button-label-text-color: var(--md-sys-color-primary);
+}
+.error-text {
+  --md-text-button-label-text-color: var(--md-sys-color-error);
+}
+md-outlined-text-field {
+  --md-outlined-text-field-container-color: var(--md-sys-color-surface-container-lowest);
+  --md-outlined-text-field-outline-color: var(--md-sys-color-outline);
+  --md-outlined-text-field-hover-outline-color: var(--md-sys-color-on-surface);
+  --md-outlined-text-field-focus-outline-color: var(--md-sys-color-primary);
+  --md-outlined-text-field-label-text-color: var(--md-sys-color-on-surface-variant);
+  --md-outlined-text-field-input-text-color: var(--md-sys-color-on-surface);
+  --md-outlined-text-field-caret-color: var(--md-sys-color-primary);
+}
+md-outlined-select {
+  --md-outlined-select-text-field-container-color: var(--md-sys-color-surface-container-lowest);
+  --md-outlined-select-text-field-outline-color: var(--md-sys-color-outline);
+  --md-outlined-select-text-field-hover-outline-color: var(--md-sys-color-on-surface);
+  --md-outlined-select-text-field-focus-outline-color: var(--md-sys-color-primary);
+  --md-outlined-select-text-field-label-text-color: var(--md-sys-color-on-surface-variant);
+  --md-outlined-select-text-field-input-text-color: var(--md-sys-color-on-surface);
+}
+md-checkbox {
+  --md-checkbox-selected-container-color: var(--md-sys-color-primary);
+  --md-checkbox-outline-color: var(--md-sys-color-outline);
+}
+md-dialog {
+  --md-dialog-container-color: var(--md-sys-color-surface-container-high);
+  --md-dialog-headline-color: var(--md-sys-color-on-surface);
+  --md-dialog-supporting-text-color: var(--md-sys-color-on-surface-variant);
+}
+
+/* 原生 <dialog> 按 MD3 形状/配色做（md-dialog 无 showModal，确认框用原生实现） */
+.md-dialog {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  border: none; border-radius: 28px;
+  padding: 24px; min-width: 320px; max-width: 86vw;
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--md-sys-color-shadow) 35%, transparent);
+}
+.md-dialog::backdrop {
+  background: color-mix(in srgb, var(--md-sys-color-scrim) 45%, transparent);
+}
+.md-dialog .dialog-title { margin-bottom: 10px; }
+.md-dialog .dialog-text { color: var(--md-sys-color-on-surface-variant); }
+.md-dialog .dialog-actions {
+  display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;
+}
 
 /* ---- 布局 ------------------------------------------------ */
 
@@ -61,15 +123,17 @@ a { color: var(--md-sys-color-primary); }
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; margin-bottom: 18px;
 }
-.topbar h1 { font-size: 21px; margin: 0; font-weight: 600; }
-.topbar select { width: auto; }
+.topbar h1 { margin: 0; }
 
 .banner {
   background: var(--md-sys-color-tertiary-container);
   color: var(--md-sys-color-on-tertiary-container);
   border-radius: 12px; padding: 10px 16px; margin-bottom: 18px; font-size: 13px;
 }
-.banner code { background: rgb(0 0 0 / .08); padding: 1px 6px; border-radius: 6px; }
+.banner code {
+  background: color-mix(in srgb, var(--md-sys-color-shadow) 10%, transparent);
+  padding: 1px 6px; border-radius: 6px;
+}
 
 /* ---- 卡片与统计 ------------------------------------------------ */
 
@@ -78,7 +142,7 @@ a { color: var(--md-sys-color-primary); }
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 16px; padding: 18px 20px; margin-bottom: 18px;
 }
-.card h2 { font-size: 14px; margin: 0 0 14px; color: var(--md-sys-color-on-surface-variant); font-weight: 600; }
+.card h2 { margin: 0 0 14px; color: var(--md-sys-color-on-surface-variant); font-weight: 600; }
 
 .stat-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -106,7 +170,7 @@ th {
   border-bottom: 1px solid var(--md-sys-color-outline);
   white-space: nowrap;
 }
-td { padding: 8px 12px; border-bottom: 1px solid var(--md-sys-color-outline-variant); vertical-align: middle; }
+td { padding: 6px 12px; border-bottom: 1px solid var(--md-sys-color-outline-variant); vertical-align: middle; }
 tbody tr:hover td { background: var(--md-sys-color-surface-container); }
 tbody tr:last-child td { border-bottom: none; }
 td.actions { text-align: right; white-space: nowrap; }
@@ -120,52 +184,68 @@ td.actions > * + * { margin-left: 6px; }
 }
 .usage-bar i { display: block; height: 100%; background: var(--md-sys-color-primary); }
 
-/* ---- 按钮 ------------------------------------------------ */
+/* ---- 表单辅助 ------------------------------------------------ */
 
-.btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 38px; padding: 0 20px; border: none; border-radius: 999px;
-  background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary);
-  font: inherit; font-size: 13.5px; font-weight: 500;
-  cursor: pointer; text-decoration: none; white-space: nowrap;
+.form-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.form-row label { font-size: 12.5px; color: var(--md-sys-color-on-surface-variant); }
+input[type="file"] {
+  color: var(--md-sys-color-on-surface-variant);
+  border: 1px dashed var(--md-sys-color-outline);
+  border-radius: 10px; padding: 7px 10px; max-width: 100%;
 }
-.btn:hover { box-shadow: 0 1px 6px rgb(0 0 0 / .25); }
-.btn.tonal {
-  background: var(--md-sys-color-secondary-container);
-  color: var(--md-sys-color-on-secondary-container);
-}
-.btn.text { background: transparent; color: var(--md-sys-color-primary); padding: 0 10px; }
-.btn.danger {
-  background: var(--md-sys-color-error-container);
-  color: var(--md-sys-color-on-error-container);
-}
-.btn.small { height: 32px; padding: 0 14px; font-size: 12.5px; }
 
-/* ---- 表单 ------------------------------------------------ */
-
-input, select, textarea {
-  background: var(--md-sys-color-surface-container-lowest);
-  color: var(--md-sys-color-on-surface);
+/* 原生 <select> 按 MD3 outlined 风格做——md-outlined-select 在 Firefox 有
+   「打开即关闭」的组件 bug，弹层由 OS 渲染的原生 select 全平台可靠 */
+.md-select {
+  appearance: none;
+  background: var(--md-sys-color-surface-container-lowest)
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 10px center;
   border: 1px solid var(--md-sys-color-outline);
-  border-radius: 10px; padding: 8px 12px;
+  border-radius: 10px; padding: 8px 34px 8px 12px;
+  color: var(--md-sys-color-on-surface);
   font: inherit; font-size: 13.5px;
+  cursor: pointer;
 }
-input:focus, select:focus, textarea:focus {
+.md-select:focus {
   outline: none;
   border-color: var(--md-sys-color-primary);
   box-shadow: 0 0 0 2px var(--md-sys-color-primary-container);
 }
-input[type="checkbox"] { accent-color: var(--md-sys-color-primary); width: 15px; height: 15px; }
-input[type="file"] { border-style: dashed; padding: 7px 10px; max-width: 100%; }
 
-.form-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.form-row label { font-size: 12.5px; color: var(--md-sys-color-on-surface-variant); }
-
-textarea.editor {
-  width: 100%; min-height: 420px; resize: vertical;
+.editor-field { width: 100%; }
+.editor-field::part(input) {
   font-family: Consolas, "JetBrains Mono", monospace;
   font-size: 13px; line-height: 1.55;
+}
+.upload-overwrite {
+  display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap;
+}
+
+/* ---- 拖拽上传 ------------------------------------------------ */
+
+.dropzone {
+  margin-top: 12px; padding: 28px 20px;
+  border: 2px dashed var(--md-sys-color-outline);
+  border-radius: 14px; text-align: center;
+  color: var(--md-sys-color-on-surface-variant);
+  transition: border-color .15s, background-color .15s;
+}
+.dropzone.over {
+  border-color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-surface-container);
+}
+.dropzone a { color: var(--md-sys-color-primary); }
+#picked-list { margin-top: 8px; }
+
+.conflict-panel {
+  margin-top: 12px; padding: 14px 16px;
+  background: var(--md-sys-color-surface-container-high);
+  border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 12px;
+}
+.conflict-list {
+  display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px;
 }
 
 /* ---- chips ------------------------------------------------ */
@@ -197,9 +277,10 @@ textarea.editor {
   color: var(--md-sys-color-on-secondary-container);
 }
 .editor-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
-.upload-overwrite {
-  display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap;
-}
+
+/* ---- 设备页 token ------------------------------------------------ */
+
+.token-value { font-size: 12px; word-break: break-all; }
 
 /* ---- 仪表盘动态 ------------------------------------------------ */
 
@@ -221,9 +302,10 @@ textarea.editor {
   border-radius: 20px; padding: 36px 40px; width: 340px;
   display: flex; flex-direction: column; gap: 16px;
 }
-.login-title { text-align: center; font-size: 17px; font-weight: 700; color: var(--md-sys-color-primary); }
+.login-title { text-align: center; font-weight: 700; color: var(--md-sys-color-primary); }
 .login-input { width: 100%; }
-.login-error { color: var(--md-sys-color-error); font-size: 13px; text-align: center; }
+.login-submit { width: 100%; }
+.login-error { color: var(--md-sys-color-error); text-align: center; }
 
 /* ---- toast ------------------------------------------------ */
 
@@ -235,7 +317,8 @@ textarea.editor {
   background: var(--md-sys-color-inverse-surface);
   color: var(--md-sys-color-inverse-on-surface);
   padding: 10px 20px; border-radius: 12px;
-  font-size: 13.5px; box-shadow: 0 4px 16px rgb(0 0 0 / .3);
+  font-size: 13.5px;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--md-sys-color-shadow) 30%, transparent);
   animation: toast-in .25s ease;
   max-width: 80vw;
 }

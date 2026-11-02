@@ -3,7 +3,7 @@
 {% block pagetitle %}上游基座{% endblock %}
 {% block content %}
 <div class="card">
-  <h2>基座状态</h2>
+  <h2 class="md-typescale-title-medium">基座状态</h2>
   <div class="form-row" style="justify-content:space-between">
     <div>
       <div class="mono">{{ status.url }}</div>
@@ -16,14 +16,16 @@
       </div>
     </div>
     <form class="form-row" hx-post="/base/update" hx-target="#base-report" hx-swap="innerHTML">
-      <label class="form-row"><input type="checkbox" name="force"> 覆盖受保护文件</label>
-      <button class="btn" type="submit">{{ '更新基座并重建' if status.cloned else '克隆基座并重建' }}</button>
+      <md-checkbox name="force" touch-target="wrapper"></md-checkbox>
+      <label class="small muted">覆盖受保护文件</label>
+      <md-filled-button type="submit">{{ '更新基座并重建' if status.cloned else '克隆基座并重建' }}</md-filled-button>
     </form>
   </div>
   <div class="muted small" style="margin-top:8px">
-    重建规则：基座文件覆盖 <span class="chip">base</span> 来源；其他来源（publish / console /
-    upload / migrate）默认受保护跳过，勾选「覆盖受保护文件」才会被基座接管。
-    上一轮 base 来源但本轮已消失的文件会被移除。
+    重建规则：基座文件覆盖 <span class="chip">base</span> 来源；其他来源（publish / upload /
+    migrate）默认受保护跳过，勾选「覆盖受保护文件」才会被基座接管。
+    上一轮 base 来源但本轮已消失的文件会被移除；重建后自动重放
+    <span class="mono">rime_ice.dict.yaml</span> 的 import_tables 联动。
   </div>
 </div>
 

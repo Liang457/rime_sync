@@ -1,0 +1,39 @@
+<table>
+  <thead><tr><th>Token</th><th>备注</th><th>签发时间</th><th></th></tr></thead>
+  <tbody>
+  {% for t in tokens %}
+    <tr>
+      <td class="mono token-value" data-full="{{ t.token }}"
+          title="点击显示/隐藏">rs_{{ t.token[3:10] }}…{{ t.token[-4:] }}</td>
+      <td>{{ t.label or '—' }}</td>
+      <td class="muted">{{ t.created[:19].replace('T', ' ') if t.created else '—' }}</td>
+      <td class="actions">
+        <md-text-button onclick="toggleToken(this)">显示</md-text-button>
+        <md-text-button onclick="copyToken(this)">复制</md-text-button>
+        <md-text-button class="error-text danger-action"
+                data-post="/devices/tokens/delete" data-vals='{"token":"{{ t.token }}"}'
+                data-refresh="tokensUpdated"
+                data-confirm="吊销 {{ (t.label or t.token[:12]) }}？对应设备将无法再同步。">吊销</md-text-button>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="empty">还没有签发任何 token</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<script>
+function tokenCell(btn) { return btn.closest('tr').querySelector('.token-value'); }
+function toggleToken(btn) {
+  var cell = tokenCell(btn);
+  var full = cell.dataset.full;
+  var masked = full.slice(0, 7) + '…' + full.slice(-4);
+  cell.textContent = (cell.textContent === masked) ? full : masked;
+}
+function copyToken(btn) {
+  var full = tokenCell(btn).dataset.full;
+  navigator.clipboard.writeText(full).then(
+    function () { showToast('已复制完整 token'); },
+    function () { showToast('复制失败（浏览器不给剪贴板权限）', 'err'); }
+  );
+}
+</script>

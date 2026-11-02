@@ -3,12 +3,32 @@
 {% block pagetitle %}设备{% endblock %}
 {% block content %}
 <div class="card">
+  <h2 class="md-typescale-title-medium">同步设备</h2>
   <div class="muted small" style="margin-bottom:10px">
     设备跑 librime 的 <span class="mono">sync_user_data</span> 生成快照并推上来；服务器只分桶中转，
     合并由各设备的 librime 完成。拉取时排除本设备（<span class="mono">?device=installation_id</span>）。
   </div>
-  <div id="devices-table">
+  <div id="devices-table" hx-get="/devices/table"
+       hx-trigger="devicesUpdated from:body" hx-swap="innerHTML">
     {% include "partials/devices_table.html" %}
+  </div>
+</div>
+
+<div class="card">
+  <h2 class="md-typescale-title-medium">API Token</h2>
+  <div class="muted small" style="margin-bottom:10px">
+    客户端请求 <span class="mono">/api/*</span> 时带 <span class="mono">X-Api-Token</span> 头即可；
+    可以签发多个（每台设备一个，泄漏了就吊销）。未签发任何 token 且未配置旧版
+    <span class="mono">api_token</span> 时，API 不启用认证（仅限可信局域网）。
+  </div>
+  <form class="form-row" style="margin-bottom:14px" hx-post="/devices/tokens/create"
+        hx-target="#tokens-table" hx-swap="innerHTML">
+    <md-outlined-text-field name="label" label="备注（如设备名）" style="width:240px"></md-outlined-text-field>
+    <md-filled-button type="submit">签发新 token</md-filled-button>
+  </form>
+  <div id="tokens-table" hx-get="/devices/tokens/table"
+       hx-trigger="tokensUpdated from:body" hx-swap="innerHTML">
+    {% include "partials/tokens_table.html" %}
   </div>
 </div>
 {% endblock %}

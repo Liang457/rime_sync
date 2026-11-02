@@ -6,17 +6,19 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import time
 import urllib.parse
 from pathlib import Path
 
 from flask import (
-    Blueprint, current_app, redirect, render_template, request, send_file,
-    session, url_for,
+    Blueprint, current_app, jsonify, redirect, render_template, request,
+    send_file, session, url_for,
 )
 
 from .safe_path import safe_relpath
+from .services import rime_ice
 from .services.store import AddItem, FileStore
 from .services.upstream import BaseManager, GitError
 from .services.userdb import UserDbStore
@@ -169,14 +171,18 @@ def console_bp(
 
     @bp.route("/files/upload", methods=["POST"])
     def files_upload():
-        uploads = request.files.getlist("files")
-        if not uploads or uploads[0].filename == "":
-            return respond("partials/files_table.html",
-                           {"rows": _upload_view_rows()}, "没有选择文件", "err")
+        """简化上传：只选目标目录（默认 cn_dicts）+ 拖文件；同名文件先报告，
+        前端确认后带 replace=1 批量替换。响应 JSON，前端 fetch 消费。"""
+        uploads = [f for f in request.files.getlist("files") if f.filename]
+        if not uploads:
+            resp = jsonify({"ok": False, "error": "没有选择文件"})
+            resp.headers.update(toast("没有选择文件", "err"))
+            return resp, 400
         prefix = request.form.get("prefix", "").strip().strip("/")
-        version = request.form.get("version", "").strip()
-        source = request.form.get("source", "upload").strip() or "upload"
+        replace = request.form.get("replace") == "1"
+        existing = store.manifest()["files"]
         items: list[AddItem] = []
+        conflicts: list[str] = []
         skipped: list[str] = []
         for f in uploads:
             name = Path(f.filename).name
@@ -185,22 +191,27 @@ def console_bp(
             except ValueError as e:
                 skipped.append(f"{name}（{e}）")
                 continue
-            items.append(AddItem(rel, f.stream.read(), source=source, version=version))
+            if rel in existing and not replace:
+                conflicts.append(rel)
+                continue
+            items.append(AddItem(rel, f.stream.read(), source="upload"))
         results = store.add_many(items, detail=f"控制台上传 {len(items)} 个文件")
-        created = sum(r["status"] == "created" for r in results)
-        updated = sum(r["status"] == "updated" for r in results)
-        unchanged = sum(r["status"] == "unchanged" for r in results)
-        msg = f"新增 {created}，更新 {updated}，不变 {unchanged}"
-        if skipped:
-            msg += f"；非法路径跳过 {len(skipped)}"
-        return respond("partials/files_table.html",
-                       {"rows": _upload_view_rows()},
-                       msg, "ok" if not skipped else "err")
-
-    def _upload_view_rows() -> list[dict]:
-        return file_rows(request.form.get("prefix_f", "all"),
-                         request.form.get("source_f", "all"),
-                         request.form.get("q_f", ""))
+        linkage = None
+        if any(re.fullmatch(r"cn_dicts/.+\.dict\.yaml", r["path"])
+               for r in results):
+            linkage = rime_ice.sync_import_tables(store)
+        resp = jsonify({
+            "ok": True,
+            "saved": results,
+            "conflicts": conflicts,
+            "skipped": skipped,
+            "revision": store.revision,
+            "rime_ice": linkage,
+        })
+        if conflicts:
+            resp.headers["X-Upload-Conflicts"] = urllib.parse.quote(
+                json.dumps(conflicts, ensure_ascii=False))
+        return resp
 
     @bp.route("/files/delete", methods=["POST"])
     def files_delete():
@@ -211,7 +222,12 @@ def console_bp(
             return "", 200, toast(str(e), "err")
         if not ok:
             return "", 200, toast(f"清单中没有 {rel}", "err")
-        return "", 200, toast(f"已删除 {rel}（移入回收站）")
+        msg = f"已删除 {rel}（移入回收站）"
+        if re.fullmatch(r"cn_dicts/.+\.dict\.yaml", rel):
+            linkage = rime_ice.sync_import_tables(store)
+            if linkage and linkage["changed"]:
+                msg += "，已同步 rime_ice.dict.yaml"
+        return "", 200, toast(msg)
 
     @bp.route("/files/download/<path:rel>")
     def files_download(rel: str):
@@ -352,7 +368,8 @@ def console_bp(
 
     @bp.route("/devices")
     def devices_page():
-        return render_template("devices.html", devices=userdb.devices())
+        return render_template("devices.html", devices=userdb.devices(),
+                               tokens=settings.tokens)
 
     @bp.route("/devices/table")
     def devices_table():
@@ -369,7 +386,31 @@ def console_bp(
         if not ok:
             return "", 200, toast(f"设备 {name} 不存在", "err")
         store.activity("userdb", f"删除设备 {name}")
-        return respond("partials/devices_table.html",
-                       {"devices": userdb.devices()}, f"已删除设备 {name}")
+        # 前端 danger-action fetch 直发后触发 devicesUpdated 事件自刷新表格
+        return "", 200, toast(f"已删除设备 {name}", devicesUpdated={})
+
+    # ---- API token 管理（多 token，设备页） -----------------------------------
+
+    def _tokens_ctx() -> dict:
+        return {"tokens": settings.tokens}
+
+    @bp.route("/devices/tokens/table")
+    def tokens_table():
+        return respond("partials/tokens_table.html", _tokens_ctx())
+
+    @bp.route("/devices/tokens/create", methods=["POST"])
+    def tokens_create():
+        entry = settings.add_token(request.form.get("label", ""))
+        store.activity("token", f"签发 API token（{entry['label'] or '未命名'}）")
+        return respond("partials/tokens_table.html", _tokens_ctx(),
+                       "已生成 token，请立即复制保存")
+
+    @bp.route("/devices/tokens/delete", methods=["POST"])
+    def tokens_delete():
+        token = request.form.get("token", "")
+        if not settings.remove_token(token):
+            return "", 200, toast("token 不存在", "err")
+        store.activity("token", "吊销一个 API token")
+        return "", 200, toast("已吊销 token", tokensUpdated={})
 
     return bp

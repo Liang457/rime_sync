@@ -1,11 +1,11 @@
 {% if error %}
 <div class="card" style="border-color: var(--md-sys-color-error)">
-  <h2 style="color: var(--md-sys-color-error)">更新失败</h2>
+  <h2 class="md-typescale-title-medium" style="color: var(--md-sys-color-error)">更新失败</h2>
   <div class="mono small">{{ error }}</div>
 </div>
 {% elif report %}
 <div class="card">
-  <h2>重建报告</h2>
+  <h2 class="md-typescale-title-medium">重建报告</h2>
   <div class="muted small mono" style="margin-bottom:10px">{{ report.git.commit }}</div>
   <table>
     <thead><tr><th>新增</th><th>更新</th><th>不变</th><th>移除</th><th>保护跳过</th></tr></thead>
@@ -19,6 +19,13 @@
       </tr>
     </tbody>
   </table>
+  {% if report.rime_ice and report.rime_ice.changed %}
+  <div class="muted small" style="margin-top:10px">
+    已重放 <span class="mono">rime_ice.dict.yaml</span> 联动：
+    import_tables +{{ report.rime_ice.added | length }} /
+    -{{ report.rime_ice.removed | length }}
+  </div>
+  {% endif %}
   {% if report.rebuild.skipped %}
   <div class="muted small" style="margin-top:10px">受保护文件（控制台编辑过 / pipeline 发布过，未被基座覆盖）：</div>
   <ul class="file-list" style="max-height:180px">

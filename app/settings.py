@@ -94,6 +94,52 @@ class Settings:
     def base_repo_url(self) -> str:
         return self.data["base"]["repo_url"]
 
+    # ---- API token（可多个，设备页管理） -----------------------------------
+
+    @staticmethod
+    def _now_iso() -> str:
+        from datetime import datetime, timezone
+
+        return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+    @property
+    def tokens(self) -> list[dict]:
+        return self.data["server"].setdefault("tokens", [])
+
+    def add_token(self, label: str = "") -> dict:
+        entry = {
+            "token": "rs_" + secrets.token_hex(16),
+            "label": label.strip(),
+            "created": self._now_iso(),
+        }
+        with self._lock:
+            self.tokens.append(entry)
+        self.save()
+        return entry
+
+    def remove_token(self, token: str) -> bool:
+        with self._lock:
+            before = len(self.tokens)
+            self.data["server"]["tokens"] = [
+                t for t in self.tokens if t.get("token") != token
+            ]
+            removed = len(self.tokens) < before
+        if removed:
+            self.save()
+        return removed
+
+    def token_ok(self, got: str) -> bool:
+        """未配置任何 token 时视为不启用认证；否则须命中旧 api_token 或任一 token。"""
+        if not self.api_token and not self.tokens:
+            return True
+        if not got:
+            return False
+        if hmac.compare_digest(got, self.api_token):
+            return True
+        return any(
+            hmac.compare_digest(got, t.get("token", "")) for t in self.tokens
+        )
+
     # ---- 控制台密码 ------------------------------------------------------
 
     @staticmethod

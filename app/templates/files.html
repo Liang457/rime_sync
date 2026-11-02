@@ -3,8 +3,8 @@
 {% block pagetitle %}词库文件{% endblock %}
 {% block content %}
 <form class="card form-row" method="get" action="/files" data-filter-form>
-  <label>目录
-    <select name="prefix">
+  <label class="small muted">目录
+    <select class="md-select" name="prefix">
       <option value="all" {{ 'selected' if prefix == 'all' }}>全部</option>
       <option value="root" {{ 'selected' if prefix == 'root' }}>根目录</option>
       {% for p in prefix_options %}
@@ -12,39 +12,47 @@
       {% endfor %}
     </select>
   </label>
-  <label>来源
-    <select name="source">
+  <label class="small muted">来源
+    <select class="md-select" name="source">
       <option value="all" {{ 'selected' if source == 'all' }}>全部</option>
       {% for s in sources %}
       <option value="{{ s }}" {{ 'selected' if source == s }}>{{ s }}</option>
       {% endfor %}
     </select>
   </label>
-  <label>搜索 <input type="search" name="q" value="{{ q }}" style="width:180px"></label>
+  <label class="small muted">搜索
+    <md-outlined-text-field type="search" name="q" value="{{ q }}"></md-outlined-text-field>
+  </label>
   <span class="muted small">共 {{ rows | length }} 个文件</span>
 </form>
 
 <div class="card">
-  <h2>上传文件</h2>
-  <form class="form-row" hx-post="/files/upload" hx-target="#file-table" hx-swap="innerHTML"
-        hx-encoding="multipart/form-data">
-    <input type="hidden" name="prefix_f" value="{{ prefix }}">
-    <input type="hidden" name="source_f" value="{{ source }}">
-    <input type="hidden" name="q_f" value="{{ q }}">
-    <label>目标目录
-      <input type="text" name="prefix" list="prefix-datalist" placeholder="cn_dicts（留空=根目录）" style="width:220px">
-      <datalist id="prefix-datalist">
-        <option value="cn_dicts"><option value="en_dicts"><option value="lua"><option value="opencc">
-      </datalist>
+  <h2 class="md-typescale-title-medium">上传文件</h2>
+  <div class="form-row">
+    <label class="small muted">目标目录
+      <select class="md-select" id="upload-prefix">
+        <option value="cn_dicts" selected>cn_dicts</option>
+        <option value="en_dicts">en_dicts</option>
+        <option value="lua">lua</option>
+        <option value="opencc">opencc</option>
+        <option value="">根目录</option>
+      </select>
     </label>
-    <label>版本 <input type="text" name="version" placeholder="如 3.3 / 2026-11-02" style="width:130px"></label>
-    <label>来源 <input type="text" name="source" value="upload" style="width:110px"></label>
-    <label class="muted">文件
-      <input type="file" name="files" multiple>
-    </label>
-    <button class="btn" type="submit">上传</button>
-  </form>
-  <div class="muted small" style="margin-top:8px">上传即发布：写入文件库并更新 manifest，设备下次同步自动拉取。rime_dict 走 <span class="mono">POST /api/publish</span> 无需经过这里。</div>
+    <span class="muted small">拖文件到下面，或点击选择；同名文件会先询问是否替换</span>
+  </div>
+  <div id="dropzone" class="dropzone">
+    <input type="file" id="upload-input" multiple hidden>
+    <div class="dropzone-hint md-typescale-body-medium">
+      拖拽文件到这里，或<a href="#" id="pick-files">点击选择文件</a>
+    </div>
+    <div id="picked-list" class="muted small"></div>
+  </div>
+  <div id="upload-result"></div>
+  <div class="form-row" style="margin-top:12px">
+    <md-filled-button id="upload-btn">上传</md-filled-button>
+    <span class="muted small">上传即发布（写入文件库并更新 manifest，设备下次同步自动拉取）；
+      cn_dicts 的 .dict.yaml 会自动登记进 rime_ice.dict.yaml 的 import_tables</span>
+  </div>
 </div>
 
 <div class="card" id="file-table"
@@ -52,10 +60,103 @@
      hx-trigger="filesUpdated from:body" hx-swap="innerHTML">
   {% include "partials/files_table.html" %}
 </div>
+
 <script>
-document.querySelectorAll('[data-filter-form] select, [data-filter-form] input')
+(function () {
+  var input = document.getElementById('upload-input');
+  var dropzone = document.getElementById('dropzone');
+  var picked = document.getElementById('picked-list');
+  var result = document.getElementById('upload-result');
+  var btn = document.getElementById('upload-btn');
+
+  function refreshPicked() {
+    picked.textContent = input.files.length
+      ? '已选 ' + input.files.length + ' 个文件：' +
+        [...input.files].map(function (f) { return f.name; }).join('、')
+      : '';
+  }
+  document.getElementById('pick-files').addEventListener('click', function (e) {
+    e.preventDefault(); input.click();
+  });
+  input.addEventListener('change', refreshPicked);
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    dropzone.addEventListener(ev, function (e) {
+      e.preventDefault(); dropzone.classList.add('over');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    dropzone.addEventListener(ev, function (e) {
+      e.preventDefault(); dropzone.classList.remove('over');
+    });
+  });
+  dropzone.addEventListener('drop', function (e) {
+    if (e.dataTransfer.files.length) {
+      input.files = e.dataTransfer.files;
+      refreshPicked();
+    }
+  });
+
+  function upload(replace) {
+    if (!input.files.length) { showToast('没有选择文件', 'err'); return; }
+    var fd = new FormData();
+    for (const f of input.files) fd.append('files', f);
+    fd.append('prefix', document.getElementById('upload-prefix').value || '');
+    if (replace) fd.append('replace', '1');
+    btn.disabled = true;
+    fetch('/files/upload', { method: 'POST', body: fd })
+      .then(function (r) { return r.json().then(function (j) { j._status = r.status; return j; }); })
+      .then(function (j) {
+        btn.disabled = false;
+        if (!j.ok) { showToast(j.error || '上传失败', 'err'); return; }
+        if (j.conflicts && j.conflicts.length) { showConflicts(j); return; }
+        finish(j, '已上传，新增 ' + j.saved.length + ' 个文件');
+      })
+      .catch(function () { btn.disabled = false; showToast('上传请求失败', 'err'); });
+  }
+
+  function showConflicts(j) {
+    var items = j.conflicts.map(function (c) {
+      return '<span class="chip">' + c + '</span>';
+    }).join(' ');
+    result.innerHTML =
+      '<div class="conflict-panel">' +
+      '<div class="md-typescale-title-small">以下 ' + j.conflicts.length +
+      ' 个同名文件已存在：</div>' +
+      '<div class="conflict-list">' + items + '</div>' +
+      '<div class="form-row">' +
+      '<md-filled-button id="replace-all">全部替换</md-filled-button>' +
+      '<md-outlined-button id="skip-conflicts">跳过它们</md-outlined-button>' +
+      '</div></div>';
+    document.getElementById('replace-all').addEventListener('click', function () {
+      upload(true); result.innerHTML = '';
+    });
+    document.getElementById('skip-conflicts').addEventListener('click', function () {
+      result.innerHTML = '';
+      finish(j, '已上传 ' + j.saved.length + ' 个文件（跳过同名 ' + j.conflicts.length + ' 个）');
+    });
+  }
+
+  function finish(j, msg) {
+    if (j.rime_ice && j.rime_ice.changed) {
+      msg += '；rime_ice.dict.yaml 已联动（+' + j.rime_ice.added.length +
+             ' -' + j.rime_ice.removed.length + '）';
+    }
+    if (j.skipped && j.skipped.length) msg += '；非法文件名跳过 ' + j.skipped.length + ' 个';
+    input.value = ''; refreshPicked();
+    if (window.htmx) htmx.trigger(document.body, 'filesUpdated');
+    showToast(msg, j.saved.length ? 'ok' : 'err');
+  }
+
+  btn.addEventListener('click', function () { upload(false); });
+})();
+</script>
+<script>
+document.querySelectorAll('[data-filter-form] select, [data-filter-form] md-outlined-text-field')
   .forEach(function (el) {
     el.addEventListener('change', function () { el.form.submit(); });
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') el.form.submit();
+    });
   });
 </script>
 {% endblock %}

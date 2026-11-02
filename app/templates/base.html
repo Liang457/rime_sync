@@ -6,16 +6,23 @@
 <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
 <title>{% block title %}RIME 控制台{% endblock %}</title>
 <script>
-(function () {
-  var t = localStorage.getItem('rime-theme');
-  if (!t) t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  document.documentElement.classList.add(t);
-})();
+/* 主题唯一来源：这套 MD3 token 自带的浅色/深色，跟随系统，无手动切换。 */
+document.documentElement.classList.add(
+  matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 </script>
-{% for f in ['light','light-mc','light-hc','dark','dark-mc','dark-hc'] %}
-<link rel="stylesheet" href="{{ url_for('static', filename='material-theme/' ~ f ~ '.css') }}">
-{% endfor %}
+<link rel="stylesheet" href="{{ url_for('static', filename='material-theme/light.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='material-theme/dark.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='console.css') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<script type="importmap">
+  { "imports": { "@material/web/": "https://esm.run/@material/web@2.2.0/" } }
+</script>
+<script type="module">
+  import '@material/web/all.js';
+  import {styles as typescaleStyles} from '@material/web/typography/md-typescale-styles.js';
+  document.adoptedStyleSheets.push(typescaleStyles.styleSheet);
+</script>
 <script src="{{ url_for('static', filename='htmx.min.js') }}" defer></script>
 </head>
 <body>
@@ -52,47 +59,27 @@
   </aside>
   <main class="main">
     <header class="topbar">
-      <h1>{% block pagetitle %}{% endblock %}</h1>
-      <select id="theme-select" title="主题">
-        <option value="light">浅色</option>
-        <option value="light-medium-contrast">浅色 · 中对比</option>
-        <option value="light-high-contrast">浅色 · 高对比</option>
-        <option value="dark">深色</option>
-        <option value="dark-medium-contrast">深色 · 中对比</option>
-        <option value="dark-high-contrast">深色 · 高对比</option>
-      </select>
+      <h1 class="md-typescale-headline-small">{% block pagetitle %}{% endblock %}</h1>
     </header>
     {% if not console_protected and request.path != '/login' %}
     <div class="banner">控制台未设密码（信任局域网模式）。服务器若暴露公网，请先运行
-      <code>python manage.py set-password</code> 开启登录。</div>
+      <code>python manage.py set-password</code> 开启登录；客户端 API 在「设备」页签发 token。</div>
     {% endif %}
     {% block content %}{% endblock %}
   </main>
 </div>
+
+<dialog id="confirm-dialog" class="md-dialog">
+  <div class="md-typescale-title-medium dialog-title">确认操作</div>
+  <div id="confirm-text" class="md-typescale-body-medium dialog-text"></div>
+  <div class="dialog-actions">
+    <md-text-button onclick="closeConfirm(false)">取消</md-text-button>
+    <md-filled-button onclick="closeConfirm(true)">确认</md-filled-button>
+  </div>
+</dialog>
+
 <div id="toast-wrap"></div>
 <script>
-(function () {
-  var CLASSES = ['light', 'light-medium-contrast', 'light-high-contrast',
-                 'dark', 'dark-medium-contrast', 'dark-high-contrast'];
-  var sel = document.getElementById('theme-select');
-  var cur = CLASSES.find(function (c) { return document.documentElement.classList.contains(c); });
-  sel.value = cur || 'light';
-  sel.addEventListener('change', function () {
-    CLASSES.forEach(function (c) { document.documentElement.classList.remove(c); });
-    document.documentElement.classList.add(sel.value);
-    localStorage.setItem('rime-theme', sel.value);
-  });
-})();
-document.body.addEventListener('htmx:afterRequest', function (e) {
-  var xhr = e.detail && e.detail.xhr;
-  if (!xhr) return;
-  var data = xhr.getResponseHeader('X-Toast-Data');
-  if (!data) return;
-  try {
-    var d = JSON.parse(decodeURIComponent(data));
-    showToast(d.message || '', d.tone || 'ok');
-  } catch (_e) {}
-});
 function showToast(msg, tone) {
   var wrap = document.getElementById('toast-wrap');
   var el = document.createElement('div');
@@ -104,6 +91,72 @@ function showToast(msg, tone) {
     setTimeout(function () { el.remove(); }, 350);
   }, 4500);
 }
+document.body.addEventListener('htmx:afterRequest', function (e) {
+  var xhr = e.detail && e.detail.xhr;
+  if (!xhr) return;
+  var data = xhr.getResponseHeader('X-Toast-Data');
+  if (!data) return;
+  try {
+    var d = JSON.parse(decodeURIComponent(data));
+    showToast(d.message || '', d.tone || 'ok');
+  } catch (_e) {}
+});
+/* hx-confirm / 危险操作统一走 MD3 风格原生对话框：
+   按钮 class="danger-action" + data-post/data-vals/data-confirm/data-remove-row/data-refresh，
+   确认后 fetch 直发，再按声明刷新行或触发表格自刷新事件。 */
+function confirmDialog(question) {
+  return new Promise(function (resolve) {
+    __confirmResolve = resolve;
+    var dlg = document.getElementById('confirm-dialog');
+    document.getElementById('confirm-text').textContent = question || '确认执行？';
+    dlg.showModal();
+  });
+}
+/* 手动 resolve（不依赖 close 事件）；close 事件仅兜底 ESC 等场景 */
+var __confirmResolve = null;
+function closeConfirm(ok) {
+  var dlg = document.getElementById('confirm-dialog');
+  if (dlg.open) dlg.close(ok ? 'ok' : '');
+  if (__confirmResolve) {
+    var r = __confirmResolve;
+    __confirmResolve = null;
+    r(!!ok);
+  }
+}
+document.getElementById('confirm-dialog').addEventListener('close', function () {
+  if (__confirmResolve) {
+    var r = __confirmResolve;
+    __confirmResolve = null;
+    r(false);
+  }
+});
+document.body.addEventListener('click', async function (e) {
+  var btn = e.target.closest && e.target.closest('.danger-action');
+  if (!btn) return;
+  e.preventDefault();
+  var ok = await confirmDialog(btn.dataset.confirm || '确认执行？');
+  if (!ok) return;
+  var vals = JSON.parse(btn.dataset.vals || '{}');
+  var body = new URLSearchParams(vals).toString();
+  try {
+    var r = await fetch(btn.dataset.post, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body,
+    });
+    var data = r.headers.get('X-Toast-Data');
+    if (data) {
+      var t = JSON.parse(decodeURIComponent(data));
+      showToast(t.message || '', t.tone || 'ok');
+    } else if (!r.ok) {
+      showToast('操作失败（' + r.status + '）', 'err');
+    }
+    if (btn.dataset.removeRow && r.ok) btn.closest('tr').remove();
+    if (btn.dataset.refresh && window.htmx) htmx.trigger(document.body, btn.dataset.refresh);
+  } catch (err) {
+    showToast('请求失败：' + err, 'err');
+  }
+});
 </script>
 </body>
 </html>

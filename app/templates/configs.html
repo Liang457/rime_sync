@@ -4,7 +4,7 @@
 {% block content %}
 <div class="configs-layout">
   <div class="card">
-    <h2>配置文件（{{ config_rels | length }}）</h2>
+    <h2 class="md-typescale-title-medium">配置文件（{{ config_rels | length }}）</h2>
     <ul class="file-list">
       {% for rel in config_rels %}
       <li><a href="/configs?path={{ rel | urlencode }}" class="mono {{ 'current' if rel == current_path }}"
@@ -14,8 +14,9 @@
       {% endfor %}
     </ul>
     <form class="form-row" style="margin-top:14px" hx-post="/configs/create" hx-swap="none">
-      <input type="text" name="path" placeholder="新文件路径，如 default.custom.yaml" style="flex:1" required>
-      <button class="btn tonal small" type="submit">新建</button>
+      <md-outlined-text-field name="path" label="新文件路径，如 default.custom.yaml"
+                              style="flex:1" required></md-outlined-text-field>
+      <md-outlined-button type="submit">新建</md-outlined-button>
     </form>
   </div>
 

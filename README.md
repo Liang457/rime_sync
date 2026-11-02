@@ -40,6 +40,12 @@ python run.py
 
 默认监听 `0.0.0.0:10033`（`config/server.json`），控制台在 `http://<主机>:<端口>/`。
 
+> **控制台界面**：MD3 风格，控件用官方 [@material/web](https://github.com/material-components/material-web)
+> 组件（锁定 2.2.0，经 esm.run CDN 加载）+ 主题 token CSS（浅/深跟随系统）。
+> **浏览器需要能访问 esm.run 与 fonts.googleapis.com**，否则控件不会升级渲染；
+> 下拉框用原生 `<select>`（MD3 配色）——`md-select` 在 Firefox 存在「菜单打开即
+> 关闭」的组件 bug。深浅色之外无其他主题档位。
+
 ### 管理命令
 
 ```bash
@@ -54,9 +60,24 @@ python manage.py import-sync <旧sync目录>          # v1 各设备用户词库
 | 键 | 说明 |
 |---|---|
 | `server.host` / `server.port` | 监听地址，默认 0.0.0.0:10033 |
-| `server.api_token` | 非空时所有 `/api/*`（除 health）需带 `X-Api-Token` 头 |
+| `server.api_token` | 旧版单 token，仍然有效（兼容存量客户端配置） |
+| `server.tokens` | API token 列表（`[{token, label, created}]`），在控制台「设备」页签发/吊销 |
 | `console.password_hash` | sha3-256；空 = 控制台免登录（仅限可信局域网） |
 | `base.repo_url` | 上游基座仓库，默认 rime-ice |
+
+认证规则：未配置任何 token 时 API 免认证；配置后除 `/api/health` 外都要带
+`X-Api-Token`（命中 `api_token` 或 `tokens` 之一即可）。建议每台设备签发一个，
+泄漏就吊销。
+
+### 词库上传与 rime-ice 联动
+
+- 控制台上传：选目标目录（默认 `cn_dicts`）→ 拖入或点选文件 → 上传；
+  同名文件会列出并询问（可「全部替换」）；不填版本号，按源文件本身识别。
+- **自动联动**：`cn_dicts/<名>.dict.yaml` 的发布（API）/上传/删除会自动维护
+  `rime_ice.dict.yaml` 的 `import_tables`；基座重建后也会重放。联动只增删
+  自己纳管的词库名（记录在 `store/imports.json`），基座自带条目（8105 等）永不触碰；
+  `rime_ice.dict.yaml` 不存在时（基座未导入）自动跳过。
+- 也可在「配置管理」里手动编辑该文件，保存同样走 manifest 差量。
 | `limits.max_upload_mb` | 上传上限 |
 
 ## API 一览（8 个）

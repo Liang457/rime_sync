@@ -93,7 +93,18 @@ class BaseManager:
             self.collect_base_files(), version=commit_short, force=force,
             detail=("克隆基座 " if cloned_now else "基座 ") + commit_short,
         )
+        # 基线重建后重放词库联动（rime_ice.dict.yaml 的 import_tables）
+        from . import rime_ice
+
+        linkage = rime_ice.sync_import_tables(self.store)
+        if linkage and linkage.get("changed"):
+            self.store.activity(
+                "rime_ice",
+                f"基座重建后联动 import_tables（+{len(linkage['added'])} "
+                f"-{len(linkage['removed'])}）",
+            )
         return {
             "git": {"cloned_now": cloned_now, "commit": commit_line},
             "rebuild": report,
+            "rime_ice": linkage,
         }

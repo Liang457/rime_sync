@@ -5,25 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>登录 · RIME 控制台</title>
 <script>
-(function () {
-  var t = localStorage.getItem('rime-theme');
-  if (!t) t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  document.documentElement.classList.add(t);
-})();
+document.documentElement.classList.add(
+  matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 </script>
-{% for f in ['light','light-mc','light-hc','dark','dark-mc','dark-hc'] %}
-<link rel="stylesheet" href="{{ url_for('static', filename='material-theme/' ~ f ~ '.css') }}">
-{% endfor %}
+<link rel="stylesheet" href="{{ url_for('static', filename='material-theme/light.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='material-theme/dark.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='console.css') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<script type="importmap">
+  { "imports": { "@material/web/": "https://esm.run/@material/web@2.2.0/" } }
+</script>
+<script type="module">
+  import '@material/web/all.js';
+  import {styles as typescaleStyles} from '@material/web/typography/md-typescale-styles.js';
+  document.adoptedStyleSheets.push(typescaleStyles.styleSheet);
+</script>
 </head>
 <body class="login-body">
 <form class="login-card" method="post" action="/login">
-  <div class="login-title">RIME 分发控制台</div>
+  <div class="login-title md-typescale-title-large">RIME 分发控制台</div>
   <input type="hidden" name="next" value="{{ next }}">
-  <input class="login-input" type="password" name="password" placeholder="控制台密码"
-         autofocus required>
-  {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
-  <button class="btn" type="submit">登录</button>
+  <md-outlined-text-field class="login-input" type="password" name="password"
+                          label="控制台密码" autofocus required></md-outlined-text-field>
+  {% if error %}<div class="login-error md-typescale-body-medium">{{ error }}</div>{% endif %}
+  <md-filled-button type="submit" class="login-submit">登录</md-filled-button>
 </form>
 </body>
 </html>

@@ -11,10 +11,11 @@
       <td>{{ r.size | human_size }}</td>
       <td class="mono muted">{{ r.sha3 }}</td>
       <td class="actions">
-        <a class="btn text small" href="/files/download/{{ r.path }}">下载</a>
-        <button class="btn danger small" hx-post="/files/delete" hx-vals='{"path":"{{ r.path }}"}'
-                hx-target="closest tr" hx-swap="delete"
-                hx-confirm="删除 {{ r.path }}？（移入回收站，设备下次同步将不再收到）">删除</button>
+        <a href="/files/download/{{ r.path }}"><md-text-button>下载</md-text-button></a>
+        <md-text-button class="error-text danger-action"
+                data-post="/files/delete" data-vals='{"path":"{{ r.path }}"}'
+                data-remove-row="1"
+                data-confirm="删除 {{ r.path }}？（移入回收站，设备下次同步将不再收到）">删除</md-text-button>
       </td>
     </tr>
   {% else %}
