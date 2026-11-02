@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}词库文件 · RIME 控制台{% endblock %}
+{% block pagetitle %}词库文件{% endblock %}
+{% block content %}
+<form class="card form-row" method="get" action="/files" data-filter-form>
+  <label>目录
+    <select name="prefix">
+      <option value="all" {{ 'selected' if prefix == 'all' }}>全部</option>
+      <option value="root" {{ 'selected' if prefix == 'root' }}>根目录</option>
+      {% for p in prefix_options %}
+      <option value="{{ p }}" {{ 'selected' if prefix == p }}>{{ p }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>来源
+    <select name="source">
+      <option value="all" {{ 'selected' if source == 'all' }}>全部</option>
+      {% for s in sources %}
+      <option value="{{ s }}" {{ 'selected' if source == s }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>搜索 <input type="search" name="q" value="{{ q }}" style="width:180px"></label>
+  <span class="muted small">共 {{ rows | length }} 个文件</span>
+</form>
+
+<div class="card">
+  <h2>上传文件</h2>
+  <form class="form-row" hx-post="/files/upload" hx-target="#file-table" hx-swap="innerHTML"
+        hx-encoding="multipart/form-data">
+    <input type="hidden" name="prefix_f" value="{{ prefix }}">
+    <input type="hidden" name="source_f" value="{{ source }}">
+    <input type="hidden" name="q_f" value="{{ q }}">
+    <label>目标目录
+      <input type="text" name="prefix" list="prefix-datalist" placeholder="cn_dicts（留空=根目录）" style="width:220px">
+      <datalist id="prefix-datalist">
+        <option value="cn_dicts"><option value="en_dicts"><option value="lua"><option value="opencc">
+      </datalist>
+    </label>
+    <label>版本 <input type="text" name="version" placeholder="如 3.3 / 2026-11-02" style="width:130px"></label>
+    <label>来源 <input type="text" name="source" value="upload" style="width:110px"></label>
+    <label class="muted">文件
+      <input type="file" name="files" multiple>
+    </label>
+    <button class="btn" type="submit">上传</button>
+  </form>
+  <div class="muted small" style="margin-top:8px">上传即发布：写入文件库并更新 manifest，设备下次同步自动拉取。rime_dict 走 <span class="mono">POST /api/publish</span> 无需经过这里。</div>
+</div>
+
+<div class="card" id="file-table"
+     hx-get="/files/table?prefix={{ prefix | urlencode }}&source={{ source | urlencode }}&q={{ q | urlencode }}"
+     hx-trigger="filesUpdated from:body" hx-swap="innerHTML">
+  {% include "partials/files_table.html" %}
+</div>
+<script>
+document.querySelectorAll('[data-filter-form] select, [data-filter-form] input')
+  .forEach(function (el) {
+    el.addEventListener('change', function () { el.form.submit(); });
+  });
+</script>
+{% endblock %}

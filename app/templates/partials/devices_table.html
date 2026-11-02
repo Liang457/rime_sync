@@ -1,0 +1,20 @@
+<table>
+  <thead><tr><th>设备（installation_id）</th><th>快照文件</th><th>占用</th><th>最后推送</th><th></th></tr></thead>
+  <tbody>
+  {% for d in devices %}
+    <tr>
+      <td class="mono">{{ d.device }}</td>
+      <td>{{ d.files }}</td>
+      <td>{{ d.size | human_size }}</td>
+      <td class="muted">{{ d.last_push or '从未' }}</td>
+      <td class="actions">
+        <button class="btn danger small" hx-post="/devices/delete"
+                hx-vals='{"device":"{{ d.device }}"}' hx-target="#devices-table" hx-swap="innerHTML"
+                hx-confirm="删除设备 {{ d.device }} 的全部快照？（设备下次 push 会重新注册）">删除</button>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="empty">还没有设备推送过用户词库</td></tr>
+  {% endfor %}
+  </tbody>
+</table>

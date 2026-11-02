@@ -1,0 +1,18 @@
+<div class="muted small" style="margin-bottom:10px">
+  {% if status.cloned %}当前基座：{{ status.commit }}{% else %}基座未克隆{% endif %}
+  · base 来源文件 {{ base_rows | length }} 个
+</div>
+<table>
+  <thead><tr><th>路径</th><th>基座 commit</th><th>大小</th></tr></thead>
+  <tbody>
+  {% for r in base_rows %}
+    <tr>
+      <td class="mono">{{ r.path }}</td>
+      <td class="mono muted">{{ r.version }}</td>
+      <td>{{ r.size | human_size }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="3" class="empty">暂无 base 来源文件——更新基座后这里会出现 rime-ice 的全部文件</td></tr>
+  {% endfor %}
+  </tbody>
+</table>

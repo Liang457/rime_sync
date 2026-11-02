@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}配置管理 · RIME 控制台{% endblock %}
+{% block pagetitle %}配置管理{% endblock %}
+{% block content %}
+<div class="configs-layout">
+  <div class="card">
+    <h2>配置文件（{{ config_rels | length }}）</h2>
+    <ul class="file-list">
+      {% for rel in config_rels %}
+      <li><a href="/configs?path={{ rel | urlencode }}" class="mono {{ 'current' if rel == current_path }}"
+             hx-get="/configs/editor?path={{ rel | urlencode }}" hx-target="#editor" hx-swap="innerHTML">{{ rel }}</a></li>
+      {% else %}
+      <li class="empty">还没有配置文件。用下方表单新建，或从上游基座重建。</li>
+      {% endfor %}
+    </ul>
+    <form class="form-row" style="margin-top:14px" hx-post="/configs/create" hx-swap="none">
+      <input type="text" name="path" placeholder="新文件路径，如 default.custom.yaml" style="flex:1" required>
+      <button class="btn tonal small" type="submit">新建</button>
+    </form>
+  </div>
+
+  <div class="card" id="editor">
+    {% if editor %}
+      {% with path=editor.path, content=editor.content, meta=editor.meta,
+              saved=editor.saved, revision=editor.revision %}
+        {% include "partials/editor.html" %}
+      {% endwith %}
+    {% else %}
+      <div class="empty">从左侧选择要编辑的配置文件</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

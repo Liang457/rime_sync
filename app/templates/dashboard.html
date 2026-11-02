@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block pagetitle %}仪表盘{% endblock %}
+{% block content %}
+<div class="stat-grid">
+  <div class="stat">
+    <div class="num">{{ stats.file_count }} <small>个 · {{ stats.total_size | human_size }}</small></div>
+    <div class="label">分发文件（revision {{ stats.revision }}）</div>
+  </div>
+  <div class="stat">
+    <div class="num">{{ devices | length }} <small>台</small></div>
+    <div class="label">已注册设备</div>
+  </div>
+  <div class="stat">
+    <div class="num">{{ base_status.base_files if base_status.cloned else '—' }} <small>个</small></div>
+    <div class="label">上游基座{% if base_status.cloned %} · {{ base_status.commit[:18] }}…{% else %}（未克隆）{% endif %}</div>
+  </div>
+  <div class="stat">
+    <div class="num">{{ (uptime_s / 3600) | round(1) }} <small>小时</small></div>
+    <div class="label">运行时长</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>存储</h2>
+  <div class="muted small">
+    {{ (disk.total - disk.free) | human_size }} / {{ disk.total | human_size }}（数据目录所在分区）</div>
+  <div class="usage-bar"><i style="width: {{ ((disk.total - disk.free) / disk.total * 100) | round(1) }}%"></i></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>词库规模（按目录）</h2>
+    <table>
+      <thead><tr><th>目录</th><th>文件数</th><th>大小</th></tr></thead>
+      <tbody>
+      {% for prefix, b in stats.by_prefix.items() %}
+        <tr><td class="mono">{{ prefix }}</td><td>{{ b.count }}</td><td>{{ b.size | human_size }}</td></tr>
+      {% else %}
+        <tr><td colspan="3" class="empty">还没有文件——去「词库文件」上传，或从上游基座重建。</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted small" style="margin-top:10px">来源：{{ stats.sources | join(' / ') or '—' }}</div>
+  </div>
+
+  <div class="card">
+    <h2>设备</h2>
+    <table>
+      <thead><tr><th>设备</th><th>快照文件</th><th>最后推送</th></tr></thead>
+      <tbody>
+      {% for d in devices %}
+        <tr>
+          <td class="mono">{{ d.device }}</td>
+          <td>{{ d.files }}（{{ d.size | human_size }}）</td>
+          <td class="muted">{{ d.last_push or '从未' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3" class="empty">还没有设备同步过用户词库。</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted small" style="margin-top:10px"><a href="/devices">设备管理 →</a></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>最近动态</h2>
+  <ul class="activity">
+    {% for a in activity %}
+    <li>
+      <time>{{ a.time[5:16] }}</time>
+      <span class="chip kind-chip">{{ a.kind }}</span>
+      <span>{{ a.detail }}</span>
+    </li>
+    {% else %}
+    <li class="empty">暂无动态</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}设备 · RIME 控制台{% endblock %}
+{% block pagetitle %}设备{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="muted small" style="margin-bottom:10px">
+    设备跑 librime 的 <span class="mono">sync_user_data</span> 生成快照并推上来；服务器只分桶中转，
+    合并由各设备的 librime 完成。拉取时排除本设备（<span class="mono">?device=installation_id</span>）。
+  </div>
+  <div id="devices-table">
+    {% include "partials/devices_table.html" %}
+  </div>
+</div>
+{% endblock %}

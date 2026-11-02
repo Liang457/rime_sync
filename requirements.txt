@@ -1,4 +1,2 @@
-Flask
-psutil
-flask-cors
-waitress
+flask>=3.1
+waitress>=3.0

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 · RIME 控制台</title>
+<script>
+(function () {
+  var t = localStorage.getItem('rime-theme');
+  if (!t) t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.classList.add(t);
+})();
+</script>
+{% for f in ['light','light-mc','light-hc','dark','dark-mc','dark-hc'] %}
+<link rel="stylesheet" href="{{ url_for('static', filename='material-theme/' ~ f ~ '.css') }}">
+{% endfor %}
+<link rel="stylesheet" href="{{ url_for('static', filename='console.css') }}">
+</head>
+<body class="login-body">
+<form class="login-card" method="post" action="/login">
+  <div class="login-title">RIME 分发控制台</div>
+  <input type="hidden" name="next" value="{{ next }}">
+  <input class="login-input" type="password" name="password" placeholder="控制台密码"
+         autofocus required>
+  {% if error %}<div class="login-error">{{ error }}</div>{% endif %}
+  <button class="btn" type="submit">登录</button>
+</form>
+</body>
+</html>

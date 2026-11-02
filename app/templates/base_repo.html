@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}上游基座 · RIME 控制台{% endblock %}
+{% block pagetitle %}上游基座{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>基座状态</h2>
+  <div class="form-row" style="justify-content:space-between">
+    <div>
+      <div class="mono">{{ status.url }}</div>
+      <div class="muted small">
+        {% if status.cloned %}
+          已克隆 · {{ status.commit }} · 基座含 {{ status.base_files }} 个文件
+        {% else %}
+          未克隆——首次更新会 <span class="mono">git clone --depth 1</span>
+        {% endif %}
+      </div>
+    </div>
+    <form class="form-row" hx-post="/base/update" hx-target="#base-report" hx-swap="innerHTML">
+      <label class="form-row"><input type="checkbox" name="force"> 覆盖受保护文件</label>
+      <button class="btn" type="submit">{{ '更新基座并重建' if status.cloned else '克隆基座并重建' }}</button>
+    </form>
+  </div>
+  <div class="muted small" style="margin-top:8px">
+    重建规则：基座文件覆盖 <span class="chip">base</span> 来源；其他来源（publish / console /
+    upload / migrate）默认受保护跳过，勾选「覆盖受保护文件」才会被基座接管。
+    上一轮 base 来源但本轮已消失的文件会被移除。
+  </div>
+</div>
+
+<div id="base-report"></div>
+
+<div class="card" id="base-table"
+     hx-get="/base/table" hx-trigger="baseUpdated from:body" hx-swap="innerHTML">
+  {% include "partials/base_table.html" %}
+</div>
+{% endblock %}

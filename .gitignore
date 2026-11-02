@@ -36,3 +36,10 @@ CLAUDE.md
 # OS
 Thumbs.db
 .DS_Store
+
+# v2: unified file store & runtime data
+store/
+trash/
+
+# config contains password hash + secret key
+config/server.json

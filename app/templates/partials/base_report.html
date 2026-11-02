@@ -1,0 +1,31 @@
+{% if error %}
+<div class="card" style="border-color: var(--md-sys-color-error)">
+  <h2 style="color: var(--md-sys-color-error)">更新失败</h2>
+  <div class="mono small">{{ error }}</div>
+</div>
+{% elif report %}
+<div class="card">
+  <h2>重建报告</h2>
+  <div class="muted small mono" style="margin-bottom:10px">{{ report.git.commit }}</div>
+  <table>
+    <thead><tr><th>新增</th><th>更新</th><th>不变</th><th>移除</th><th>保护跳过</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>{{ report.rebuild.added }}</td>
+        <td>{{ report.rebuild.updated }}</td>
+        <td>{{ report.rebuild.unchanged }}</td>
+        <td>{{ report.rebuild.removed }}</td>
+        <td>{{ report.rebuild.skipped | length }}</td>
+      </tr>
+    </tbody>
+  </table>
+  {% if report.rebuild.skipped %}
+  <div class="muted small" style="margin-top:10px">受保护文件（控制台编辑过 / pipeline 发布过，未被基座覆盖）：</div>
+  <ul class="file-list" style="max-height:180px">
+    {% for s in report.rebuild.skipped %}
+    <li><span class="mono small">{{ s.path }}</span> <span class="muted small">— {{ s.reason }}</span></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endif %}

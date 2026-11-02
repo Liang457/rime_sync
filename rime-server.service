@@ -1,15 +1,15 @@
 [Unit]
-Description=Rime Config Sync Server
+Description=rime-sync server (v2, files-only + web console)
 After=network.target
 
 [Service]
 Type=simple
+# 按实际部署环境修改 User / WorkingDirectory / ExecStart 三处路径
+User=gk-pi
 WorkingDirectory=/home/gk-pi/rime_server
-ExecStart=/home/gk-pi/rime_server/start_server.sh
-Restart=always
-RestartSec=10
-StandardOutput=append:/home/gk-pi/rime_server/logs/stdout.log
-StandardError=append:/home/gk-pi/rime_server/logs/stderr.log
+ExecStart=/home/gk-pi/rime_server/.venv/bin/python run.py
+Restart=on-failure
+RestartSec=5
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
