@@ -81,12 +81,12 @@ def test_upload_cn_dict_updates_rime_ice(env):
                             source="base")])
     upload_file(client, "zzz.dict.yaml", b"E\t1", prefix="cn_dicts")
     content = store.get_path("rime_ice.dict.yaml").read_text("utf-8")
-    assert "- zzz" in content and "- 8105" in content
+    assert "- cn_dicts/zzz" in content and "- 8105" in content
     # 删除词库 → 联动移除
     r = client.post("/files/delete", data={"path": "cn_dicts/zzz.dict.yaml"})
     assert "已同步 rime_ice.dict.yaml" in toast_of(r)
     content = store.get_path("rime_ice.dict.yaml").read_text("utf-8")
-    assert "- zzz" not in content and "- 8105" in content
+    assert "- cn_dicts/zzz" not in content and "- 8105" in content
 
 
 def test_delete_via_console(env):
@@ -384,7 +384,6 @@ def test_patch_form_save_flow(env):
         "opt::ascii_composer/switch_key/Shift_R": "",       # 删除（不在补丁里，无碍）
         "hotkey::F4": "on",
         "hotkey::Control+grave": "on",
-        "opt::key_binder/select_first_character": "bracketleft",
     })
     assert "已保存" in toast_of(r)
     text = (root / "store" / "files" / "default.custom.yaml").read_text("utf-8")
@@ -393,7 +392,6 @@ def test_patch_form_save_flow(env):
     assert p["ascii_composer/good_old_caps_lock"] is False
     assert p["ascii_composer/switch_key/Shift_L"] == "commit_text"
     assert p["switcher/hotkeys"] == ["F4", "Control+grave"]
-    assert p["key_binder/select_first_character"] == "bracketleft"
     assert p["custom/thing"] == "keepme"                    # 手写键保留
     manifest = json.loads((root / "store" / "manifest.json").read_text("utf-8"))
     assert manifest["files"]["default.custom.yaml"]["source"] == "console"
@@ -452,7 +450,7 @@ def test_configs_page_groups_and_editor_views(env):
     _mk_default_pair(app)
 
     r = client.get("/configs?path=default.custom.yaml")
-    assert "定制补丁".encode() in r.data
+    assert "常用定制".encode() in r.data          # 预设区（default.custom.yaml 是预设）
     assert b'data-tab="form"' in r.data            # 有「常用设置」Tab
     assert b"schema-order-input" in r.data
     assert "跟随基座默认".encode() in r.data
@@ -468,3 +466,81 @@ def test_configs_page_groups_and_editor_views(env):
                 replace="1")
     r = client.get("/configs?path=default.custom.yaml")
     assert "解析失败".encode() in r.data
+
+
+# ---- 词库开关（P4）----------------------------------------------------------
+
+
+def _mk_main_dict(app, text="import_tables:\n  - cn_dicts/8105\n  - cn_dicts/tencent\n"):
+    from app.services.store import AddItem
+
+    app.extensions["store"].add_many(
+        [AddItem("rime_ice.dict.yaml", text.encode("utf-8"), source="base")])
+
+
+def test_dict_toggle_page_and_endpoint(env):
+    app, client, root = env
+    _mk_main_dict(app)
+    upload_file(client, "zzz.dict.yaml", b"E\t1", prefix="cn_dicts")
+
+    r = client.get("/files")
+    assert "词库开关".encode() in r.data
+    assert b"cn_dicts/tencent" in r.data and b"cn_dicts/zzz" in r.data
+
+    # 关闭腾讯词向量 → 文件即时更新
+    r = client.post("/files/toggle", data={"table": "cn_dicts/tencent",
+                                           "enabled": "0"})
+    j = r.get_json()
+    assert j["ok"] is True and j["changed"] is True
+    content = app.extensions["store"].get_path("rime_ice.dict.yaml").read_text("utf-8")
+    assert "tencent" not in content and "- cn_dicts/8105" in content
+
+    # 启用不存在的词库 → 400 + 提示
+    r = client.post("/files/toggle", data={"table": "cn_dicts/ghost",
+                                           "enabled": "1"})
+    assert r.status_code == 400 and "无法启用" in toast_of(r)
+    # 非法条目 → 400
+    r = client.post("/files/toggle", data={"table": "../evil", "enabled": "0"})
+    assert r.status_code == 400 and "非法" in toast_of(r)
+
+
+# ---- 预设定制文件（P4）--------------------------------------------------------
+
+
+def test_configs_preset_create_and_open(env):
+    app, client, root = env
+    r = client.post("/configs/preset", data={"name": "weasel.custom.yaml"})
+    assert r.headers["HX-Redirect"].endswith("/configs?path=weasel.custom.yaml")
+    manifest = json.loads((root / "store" / "manifest.json").read_text("utf-8"))
+    assert manifest["files"]["weasel.custom.yaml"]["source"] == "console"
+    disk = (root / "store" / "files" / "weasel.custom.yaml").read_text("utf-8")
+    assert "patch: {}" in disk and "小狼毫" in disk     # 模板带常用键提示
+    # 再次创建 → 已存在直接跳转，不覆盖
+    r = client.post("/configs/preset", data={"name": "weasel.custom.yaml"})
+    assert "已存在" in toast_of(r)
+    assert disk == (root / "store" / "files" / "weasel.custom.yaml").read_text("utf-8")
+    # 白名单外拒绝
+    r = client.post("/configs/preset", data={"name": "evil.custom.yaml"})
+    assert "未知" in toast_of(r)
+
+
+def test_configs_page_preset_section_and_banner(env):
+    app, client, root = env
+    from app.services.store import AddItem
+
+    app.extensions["store"].add_many(
+        [AddItem("weasel.yaml", b"style:\n  color_scheme: x\n", source="base")])
+    # default.custom.yaml 已存在（预设区直接是链接），weasel.custom.yaml 缺失（创建按钮）
+    upload_file(client, "default.custom.yaml", b"patch: {}\n")
+
+    r = client.get("/configs")
+    assert "常用定制".encode() in r.data
+    assert b'name" value="weasel.custom.yaml"' in r.data      # 创建按钮
+    assert b'value="default.custom.yaml"' not in r.data       # 已存在的不重复出现按钮
+
+    r = client.get("/configs?path=weasel.yaml")
+    assert "创建 weasel.custom.yaml".encode() in r.data       # 警示条一键创建
+
+    client.post("/configs/preset", data={"name": "weasel.custom.yaml"})
+    r = client.get("/configs?path=weasel.yaml")
+    assert "创建 weasel.custom.yaml".encode() not in r.data   # 建好后按钮消失

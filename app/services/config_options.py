@@ -1,8 +1,8 @@
 """「常用设置」表单注册表：描述每个可表单化的 patch 键。
 
-首版只覆盖 default.custom.yaml（方案列表/菜单/中英切换/以词定字）——
-这些全部 patch 自基座 default.yaml；rime_ice.custom.yaml、weasel.custom.yaml
-暂走源码模式，后续按需在 TARGETS 里加组。
+首版只覆盖 default.custom.yaml（方案列表/菜单/中英切换）——这些全部 patch
+自基座 default.yaml；rime_ice/weasel/squirrel/trime 等走源码模式
+（见 PRESETS），后续按需在 TARGETS 里加组。
 
 每项带类型标签，模板按类型渲染控件；表单值约定见 console.configs_patch_save。
 """
@@ -12,6 +12,8 @@ import re
 from dataclasses import dataclass, field
 
 import yaml
+
+from . import custom_yaml
 
 
 @dataclass(frozen=True)
@@ -46,20 +48,6 @@ _SWITCH_KEY = (
     ("noop", "noop · 不切换"),
     ("set_ascii_mode", "set_ascii_mode · 切到英文"),
     ("unset_ascii_mode", "unset_ascii_mode · 切到中文"),
-)
-
-_KEYS = (
-    ("bracketleft", "[ 左中括号"),
-    ("bracketright", "] 右中括号"),
-    ("minus", "- 减号"),
-    ("equal", "= 等号"),
-    ("comma", ", 逗号"),
-    ("period", ". 句号"),
-    ("semicolon", "; 分号"),
-    ("apostrophe", "' 单引号"),
-    ("slash", "/ 斜杠"),
-    ("grave", "` 反引号"),
-    ("Tab", "Tab"),
 )
 
 _HOTKEY_CHOICES = (
@@ -99,18 +87,77 @@ _DEFAULT_TARGET = TargetSpec(
             Option("ascii_composer/switch_key/Control_R", "右 Ctrl", "enum",
                    choices=_SWITCH_KEY),
         )),
-        Group("以词定字", (
-            Option("key_binder/select_first_character", "取词首字快捷键", "keyname",
-                   choices=_KEYS, help="上屏当前词句的第一个字"),
-            Option("key_binder/select_last_character", "取词尾字快捷键", "keyname",
-                   choices=_KEYS, help="上屏当前词句的最后一个字"),
-        )),
     ),
 )
 
-# 按补丁文件名索引；rime_ice.custom.yaml 等后续要表单化时往这里加
+# 按补丁文件名索引；要表单化更多文件时往这里加
 TARGETS: dict[str, TargetSpec] = {
     t.patch_file: t for t in (_DEFAULT_TARGET,)
+}
+
+# ---- 预设定制文件：配置页一键创建，缺失时也可从基座文件警示条直接补建 ----------
+
+def _starter(hints: str) -> str:
+    body = hints.strip("\n")
+    return (custom_yaml.HEADER_COMMENT
+            + ("\n" + body + "\n" if body else "") + "\npatch: {}\n")
+
+
+_PRESET_WEASEL_HINTS = """
+# 小狼毫（Windows）界面定制，常用键（值要与 weasel.yaml 里的定义对应）：
+#   patch/style/color_scheme: 鸦青     # 配色方案名（preset_color_schemes 键）
+#   patch/style/color_scheme_dark: 幽蓝
+#   patch/style/horizontal: true       # 候选横排
+#   patch/style/font_face: 微软雅黑
+#   patch/style/font_point: 12
+"""
+
+_PRESET_SQUIRREL_HINTS = """
+# 鼠须管（macOS）界面定制，常用键（值要与 squirrel.yaml 里的定义对应）：
+#   patch/style/color_scheme: clean_white     # 配色方案名（preset_color_schemes 键）
+#   patch/style/horizontal: true              # 候选横排
+#   patch/style/font_face: PingFangSC-Regular
+#   patch/style/font_point: 16
+#   patch/app_options/com.apple.Terminal/ascii_mode: true
+"""
+
+_PRESET_TRIME_HINTS = """
+# 同文（Android）定制补丁。注意：trime.yaml 默认内置在 APK 里，
+# 手机用户目录可能没有它——没有基座文件时补丁不生效，留作备用。
+# 常用键（源码手写，值要与 trime.yaml 里的定义对应）：
+#   patch/style/color_scheme: default_theme
+#   patch/style/keyboards: default
+#   patch/style/horizontal: false
+"""
+
+_PRESET_RIME_ICE_HINTS = """
+# 雾凇拼音方案级定制（rime_ice.custom.yaml 覆盖 rime_ice.schema.yaml /
+# rime_ice.dict.yaml），常用键：
+#   patch/translator/enable_sentence: true
+#   patch/speller/algebra/__patch: ...     # 拼写运算等高级定制
+"""
+
+PRESETS: dict[str, dict] = {
+    "default.custom.yaml": {
+        "desc": "全局配置：方案列表/候选数/中英切换，支持「常用设置」表单",
+        "starter": custom_yaml.HEADER_COMMENT + "\npatch: {}\n",
+    },
+    "rime_ice.custom.yaml": {
+        "desc": "雾凇拼音方案级定制（源码手写）",
+        "starter": _starter(_PRESET_RIME_ICE_HINTS),
+    },
+    "weasel.custom.yaml": {
+        "desc": "Windows 小狼毫界面定制（源码手写）",
+        "starter": _starter(_PRESET_WEASEL_HINTS),
+    },
+    "squirrel.custom.yaml": {
+        "desc": "macOS 鼠须管界面定制（源码手写）",
+        "starter": _starter(_PRESET_SQUIRREL_HINTS),
+    },
+    "trime.custom.yaml": {
+        "desc": "Android 同文定制（源码手写；trime.yaml 内置在 APK，留作备用）",
+        "starter": _starter(_PRESET_TRIME_HINTS),
+    },
 }
 
 

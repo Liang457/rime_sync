@@ -1,0 +1,25 @@
+{# 词库开关：rime_ice.dict.yaml 的 import_tables，开关即时写入；
+   选择存 imports.json，基座更新后由联动自动重放。 #}
+<h2 class="md-typescale-title-medium">词库开关</h2>
+<div class="muted small" style="margin-bottom:10px">
+  开关直接写入 <span class="mono">rime_ice.dict.yaml</span> 的 import_tables，
+  基座更新后自动重放你的选择；字表类（大字表等）启用后自动排在 8105 之下。
+  上传/发布的词库默认启用，除非在这里关过。
+</div>
+{% if rows %}
+<div class="toggle-list">
+  {% for r in rows %}
+  <label class="toggle-row">
+    <input type="checkbox" class="dict-toggle" data-table="{{ r.table }}"
+           {{ 'checked' if r.enabled }}>
+    <span class="mono">{{ r.table }}</span>
+    {% if r.label %}<span class="small muted">{{ r.label }}</span>{% endif %}
+    {% if r.source %}<span class="chip b-{{ r.source }}">{{ r.source }}</span>{% endif %}
+    {% if r.dangling %}<span class="chip">文件缺失，仅可关闭</span>{% endif %}
+  </label>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty small">还没有 cn_dicts 词库文件——先到「上游基座」更新基座，
+  或上传 cn_dicts/*.dict.yaml。</div>
+{% endif %}

@@ -6,8 +6,23 @@
   <div class="card">
     <h2 class="md-typescale-title-medium">配置文件（{{ custom_rels | length + other_rels | length }}）</h2>
     <ul class="file-list">
+      <li class="muted small" style="padding:0 10px 4px">常用定制（点名字建补丁，基座更新不覆盖）</li>
+      {% for p in presets %}
+      <li>
+        {% if p.exists %}
+        <a href="/configs?path={{ p.name | urlencode }}" class="mono {{ 'current' if p.name == current_path }}"
+           hx-get="/configs/editor?path={{ p.name | urlencode }}" hx-target="#editor" hx-swap="innerHTML"
+           title="{{ p.desc }}">{{ p.name }}</a>
+        {% else %}
+        <form hx-post="/configs/preset" hx-swap="none" class="preset-create">
+          <input type="hidden" name="name" value="{{ p.name }}">
+          <button type="submit" class="linklike mono" title="{{ p.desc }}">＋ {{ p.name }}</button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
       {% if custom_rels %}
-      <li class="muted small" style="padding:6px 10px 2px">定制补丁（改这里，基座更新不覆盖）</li>
+      <li class="muted small" style="padding:10px 10px 2px">定制补丁（改这里，基座更新不覆盖）</li>
       {% for rel in custom_rels %}
       <li><a href="/configs?path={{ rel | urlencode }}" class="mono {{ 'current' if rel == current_path }}"
              hx-get="/configs/editor?path={{ rel | urlencode }}" hx-target="#editor" hx-swap="innerHTML">{{ rel }}</a></li>
@@ -31,14 +46,15 @@
     </form>
     <div class="muted small" style="margin-top:8px">
       定制统一走 <span class="mono">*.custom.yaml</span> 补丁（如 default.custom.yaml 对应
-      default.yaml）：常用项在「常用设置」里点选，其余在「源码」里手写；补丁文件不受基座更新影响。
-    </div>
+      default.yaml，weasel/squirrel/trime 对应各端外观配置）：常用项在「常用设置」里点选，
+      其余在「源码」里手写；补丁文件不受基座更新影响。</div>
   </div>
 
   <div class="card" id="editor">
     {% if editor %}
       {% with path=editor.path, content=editor.content, meta=editor.meta,
-              saved=editor.saved, revision=editor.revision, custom=editor.custom %}
+              saved=editor.saved, revision=editor.revision, custom=editor.custom,
+              preset_custom=editor.preset_custom %}
         {% include "partials/editor.html" %}
       {% endwith %}
     {% else %}

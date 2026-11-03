@@ -276,6 +276,24 @@ input[type="file"] {
   background: var(--md-sys-color-secondary-container);
   color: var(--md-sys-color-on-secondary-container);
 }
+.preset-create { margin: 0; }
+.preset-create .linklike {
+  display: block; width: 100%; text-align: left; padding: 7px 10px;
+  border-radius: 8px; border: none; background: none; cursor: pointer;
+  font: inherit; color: var(--md-sys-color-primary);
+}
+.preset-create .linklike:hover { background: var(--md-sys-color-surface-container-high); }
+.banner .preset-create { display: inline-block; margin-left: 10px; }
+.banner .linklike {
+  border: none; background: none; cursor: pointer; font: inherit;
+  color: var(--md-sys-color-primary); text-decoration: underline; padding: 0;
+}
+.toggle-list { display: flex; flex-direction: column; }
+.toggle-row {
+  display: flex; gap: 10px; align-items: center; padding: 7px 10px;
+  border-radius: 8px; flex-wrap: wrap;
+}
+.toggle-row:hover { background: var(--md-sys-color-surface-container-high); }
 .editor-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 
 /* ---- 设备页 token ------------------------------------------------ */

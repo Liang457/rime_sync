@@ -74,7 +74,7 @@ def test_publish_links_rime_ice(env):
     r = publish(client, "cn_dicts/new.dict.yaml", b"X", source="rime_dict")
     j = r.get_json()
     assert j["rime_ice"]["changed"] is True
-    assert "- new" in store.get_path("rime_ice.dict.yaml").read_text("utf-8")
+    assert "- cn_dicts/new" in store.get_path("rime_ice.dict.yaml").read_text("utf-8")
     # 重复发布 unchanged → 不再触发联动
     r = publish(client, "cn_dicts/new.dict.yaml", b"X", source="rime_dict")
     assert r.get_json()["rime_ice"] is None

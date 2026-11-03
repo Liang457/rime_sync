@@ -174,6 +174,7 @@ def console_bp(
         return render_template(
             "files.html",
             rows=file_rows(prefix, source, q),
+            toggle_rows=rime_ice.toggle_rows(store),
             prefix=prefix,
             source=source,
             q=q,
@@ -188,6 +189,31 @@ def console_bp(
                               request.args.get("source", "all"),
                               request.args.get("q", "")),
         })
+
+    @bp.route("/files/toggles")
+    def files_toggles():
+        """词库开关卡片局部刷新（togglesUpdated 事件触发）。"""
+        return respond("partials/toggles.html",
+                       {"rows": rime_ice.toggle_rows(store)})
+
+    @bp.route("/files/toggle", methods=["POST"])
+    def files_toggle():
+        """词库开关：开/关 rime_ice.dict.yaml 里的一个 import_tables 条目。"""
+        table = request.form.get("table", "").strip()
+        enabled = request.form.get("enabled") == "1"
+        try:
+            report = rime_ice.toggle_table(store, table, enabled)
+        except ValueError as e:
+            resp = jsonify({"ok": False, "error": str(e)})
+            resp.headers.update(toast(str(e), "err"))
+            return resp, 400
+        msg = f"已启用 {table}" if enabled else f"已关闭 {table}"
+        if report["changed"]:
+            msg += "，import_tables 已更新（设备同步后重新部署生效）"
+        resp = jsonify({"ok": True, "changed": report["changed"],
+                        "revision": store.revision})
+        resp.headers.update(toast(msg))
+        return resp
 
     @bp.route("/files/upload", methods=["POST"])
     def files_upload():
@@ -300,7 +326,14 @@ def console_bp(
         disk = store.get_path(path)
         content = disk.read_text(encoding="utf-8", errors="replace") if disk else ""
         ctx = {"path": path, "content": content, "meta": meta, "saved": saved,
-               "revision": store.revision}
+               "revision": store.revision, "preset_custom": None}
+        if meta.get("source") == "base":
+            # 基座文件对应的定制补丁还没建 → 警示条里给一键创建入口
+            stem = re.sub(r"(\.dict)?\.yaml$", "", path)
+            candidate = f"{stem}.custom.yaml"
+            if (candidate in config_options.PRESETS
+                    and candidate not in store.manifest()["files"]):
+                ctx["preset_custom"] = candidate
         if path.endswith(".custom.yaml"):
             ctx["custom"] = _custom_form_ctx(path, content)
         else:
@@ -311,10 +344,16 @@ def console_bp(
     def configs_page():
         path = request.args.get("path", "")
         editor = _editor_ctx(path, saved=False) if path else None
+        preset_files = list(config_options.PRESETS)
         rels = _config_rels()
+        presets = [{"name": n, "desc": config_options.PRESETS[n]["desc"],
+                    "exists": n in store.manifest()["files"]}
+                   for n in preset_files]
         return render_template(
             "configs.html",
-            custom_rels=[r for r in rels if r.endswith(".custom.yaml")],
+            presets=presets,
+            custom_rels=[r for r in rels if r.endswith(".custom.yaml")
+                         and r not in preset_files],
             other_rels=[r for r in rels if not r.endswith(".custom.yaml")],
             editor=editor,
             current_path=path,
@@ -453,6 +492,29 @@ def console_bp(
         headers = toast(f"已创建 {path}")
         # 全页跳转到新文件，左侧列表与编辑器一次到位
         headers["HX-Redirect"] = url_for("console.configs_page", path=path)
+        return "", 200, headers
+
+    @bp.route("/configs/preset", methods=["POST"])
+    def configs_preset():
+        """预设定制文件：不存在则按模板创建（console 来源），整页跳进编辑器；
+        已存在则直接打开，不重复创建。"""
+        name = request.form.get("name", "").strip()
+        preset = config_options.PRESETS.get(name)
+        if preset is None:
+            return "", 200, toast("未知的预设文件", "err")
+        try:
+            name = safe_relpath(name)
+        except ValueError as e:
+            return "", 200, toast(str(e), "err")
+        existed = name in store.manifest()["files"]
+        if not existed:
+            store.add_many(
+                [AddItem(name, preset["starter"].encode("utf-8"),
+                         source="console")],
+                detail=f"控制台新建预设 {name}",
+            )
+        headers = toast(f"已创建 {name}" if not existed else f"{name} 已存在")
+        headers["HX-Redirect"] = url_for("console.configs_page", path=name)
         return "", 200, headers
 
     @bp.route("/configs/upload", methods=["POST"])

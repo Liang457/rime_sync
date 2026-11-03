@@ -11,7 +11,14 @@
 
 {% if meta.source == 'base' %}
 <div class="banner">基座文件：直接修改会在基座更新时被上游覆盖。定制请写到对应的
-  <span class="mono">*.custom.yaml</span> 补丁（左侧「定制补丁」分组）。</div>
+  <span class="mono">*.custom.yaml</span> 补丁（左侧「常用定制」分组）。
+  {% if preset_custom %}
+  <form hx-post="/configs/preset" hx-swap="none" class="preset-create">
+    <input type="hidden" name="name" value="{{ preset_custom }}">
+    <button type="submit" class="linklike">创建 {{ preset_custom }}</button>
+  </form>
+  {% endif %}
+</div>
 {% endif %}
 
 {% if custom %}

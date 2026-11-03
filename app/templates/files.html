@@ -28,6 +28,11 @@
     rime-ice 基座文件请到 <a href="/base">上游基座</a> 页查看。</span>
 </form>
 
+<div class="card" id="toggles-card"
+     hx-get="/files/toggles" hx-trigger="togglesUpdated from:body" hx-swap="innerHTML">
+  {% with rows = toggle_rows %}{% include "partials/toggles.html" %}{% endwith %}
+</div>
+
 <div class="card">
   <h2 class="md-typescale-title-medium">上传文件</h2>
   <div class="form-row">
@@ -150,6 +155,35 @@
   }
 
   btn.addEventListener('click', function () { upload(false); });
+})();
+</script>
+<script>
+(function () {
+  /* 词库开关：change 即 POST，成功后触发 togglesUpdated 让卡片自刷新 */
+  function toastFrom(resp) {
+    var raw = resp.headers.get('X-Toast-Data');
+    return raw ? JSON.parse(decodeURIComponent(raw)) : null;
+  }
+  document.getElementById('toggles-card').addEventListener('change',
+    function (e) {
+      var cb = e.target.closest('.dict-toggle');
+      if (!cb) return;
+      var fd = new FormData();
+      fd.append('table', cb.dataset.table);
+      fd.append('enabled', cb.checked ? '1' : '0');
+      cb.disabled = true;
+      fetch('/files/toggle', { method: 'POST', body: fd })
+        .then(function (r) {
+          var t = toastFrom(r);
+          if (t) showToast(t.message, t.tone);
+          if (window.htmx) htmx.trigger(document.body, 'togglesUpdated');
+          else cb.disabled = false;
+        })
+        .catch(function () {
+          cb.disabled = false; cb.checked = !cb.checked;
+          showToast('开关请求失败', 'err');
+        });
+    });
 })();
 </script>
 <script>
