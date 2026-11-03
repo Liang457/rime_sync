@@ -1,0 +1,128 @@
+{# 「常用设置」表单：按注册表渲染，写回 .custom.yaml 的 patch 段。
+   值约定：opt::<key>（空 = 删除该键恢复基座默认；bool 用 true/false）；
+   hotkey::<value> 多选框（全不选 = 删除）；opt::schema_list_order 顺序。 #}
+{% set patch = custom.patch %}
+{% set basevals = custom.base_values %}
+<form hx-post="/configs/patch/save" hx-target="#editor" hx-swap="innerHTML">
+  <input type="hidden" name="path" value="{{ path }}">
+  {% for group in custom.spec.groups %}
+  <div class="group-title">{{ group.title }}</div>
+  {% for opt in group.options %}
+    {% set cur = patch.get(opt.key) %}
+    {% set base = basevals.get(opt.key) %}
+    <div class="opt-row">
+      <span class="opt-label">{{ opt.label }}</span>
+      {% if opt.type == 'bool' %}
+        <select class="md-select" name="opt::{{ opt.key }}">
+          <option value="" {{ 'selected' if cur is none }}>跟随基座默认</option>
+          <option value="true" {{ 'selected' if cur == true }}>开</option>
+          <option value="false" {{ 'selected' if cur == false }}>关</option>
+        </select>
+      {% elif opt.type == 'int' %}
+        <md-outlined-text-field type="number" name="opt::{{ opt.key }}"
+                                value="{{ '' if cur is none else cur }}"
+                                placeholder="{{ '' if base is none else base }}"
+                                min="{{ opt.int_min }}" max="{{ opt.int_max }}"
+                                style="width:90px"></md-outlined-text-field>
+      {% elif opt.type == 'enum' %}
+        <select class="md-select" name="opt::{{ opt.key }}">
+          <option value="" {{ 'selected' if cur is none }}>跟随基座默认</option>
+          {% for v, lbl in opt.choices %}
+          <option value="{{ v }}" {{ 'selected' if cur == v }}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      {% elif opt.type == 'keyname' %}
+        <select class="md-select" name="opt::{{ opt.key }}">
+          <option value="" {{ 'selected' if cur is none }}>不设置</option>
+          {% for v, lbl in opt.choices %}
+          <option value="{{ v }}" {{ 'selected' if cur == v }}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      {% elif opt.type == 'hotkeys' %}
+        {% for v, lbl in opt.choices %}
+        <label class="small"><input type="checkbox" name="hotkey::{{ v }}"
+               {{ 'checked' if cur is not none and v in cur }}> {{ lbl }}</label>
+        {% endfor %}
+      {% elif opt.type == 'schema_list' %}
+        <div style="flex-basis:100%">
+          <div class="form-row">
+            {% for s in custom.schemas %}
+            <label class="small"><input type="checkbox" class="schema-check"
+                   value="{{ s.id }}" data-name="{{ s.name }}（{{ s.id }}）"
+                   {{ 'checked' if s.id in custom.schema_order }}> {{ s.name }}
+              <span class="mono muted">{{ s.id }}</span>
+              <span class="chip b-{{ s.source }}">{{ s.source }}</span></label>
+            {% else %}
+            <span class="muted small">文件库里还没有 *.schema.yaml——先更新基座</span>
+            {% endfor %}
+          </div>
+          <div class="muted small" style="margin-top:6px">
+            顺序即优先级，第一项为默认方案（↑↓ 调整）：</div>
+          <ul id="schema-order" class="schema-order"></ul>
+          <input type="hidden" name="opt::schema_list_order"
+                 id="schema-order-input"
+                 value="{{ custom.schema_order | join(',') }}">
+        </div>
+      {% endif %}
+      <span class="opt-hint">
+        {% if base is not none %}上游默认：{% if base == true %}开
+          {% elif base == false %}关
+          {% elif base is iterable and base is not string %}{{ base | join('、') }}
+          {% else %}{{ base }}{% endif %}
+        {% endif %}
+        {% if opt.help %}{% if base is not none %} · {% endif %}{{ opt.help }}{% endif %}
+      </span>
+    </div>
+  {% endfor %}
+  {% endfor %}
+  <div class="form-row" style="margin-top:16px">
+    <md-filled-button type="submit">保存补丁</md-filled-button>
+    <span class="muted small">「跟随基座默认」/ 不勾选 = 从补丁删除该项；写入
+      <span class="mono">{{ path }}</span>（console 来源，基座更新不覆盖），设备同步后重新部署生效</span>
+  </div>
+</form>
+
+<script>
+(function () {
+  var input = document.getElementById('schema-order-input');
+  var list = document.getElementById('schema-order');
+  if (!input || !list) return;
+  var order = input.value ? input.value.split(',').filter(Boolean) : [];
+  var names = {};
+  document.querySelectorAll('.schema-check').forEach(function (cb) {
+    names[cb.value] = cb.dataset.name || cb.value;
+  });
+  function render() {
+    list.innerHTML = '';
+    order.forEach(function (id, i) {
+      var li = document.createElement('li');
+      li.innerHTML = '<span class="mono">' + (i + 1) + '</span> ' +
+        (names[id] || id) +
+        ' <button type="button" data-i="' + i + '" data-d="-1">↑</button>' +
+        ' <button type="button" data-i="' + i + '" data-d="1">↓</button>';
+      list.appendChild(li);
+    });
+    input.value = order.join(',');
+    list.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var i = parseInt(b.dataset.i, 10);
+        var j = i + parseInt(b.dataset.d, 10);
+        if (j < 0 || j >= order.length) return;
+        var t = order[i]; order[i] = order[j]; order[j] = t;
+        render();
+      });
+    });
+  }
+  document.querySelectorAll('.schema-check').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      if (cb.checked) {
+        if (order.indexOf(cb.value) < 0) order.push(cb.value);
+      } else {
+        order = order.filter(function (x) { return x !== cb.value; });
+      }
+      render();
+    });
+  });
+  render();
+})();
+</script>

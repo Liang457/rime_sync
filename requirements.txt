@@ -1,2 +1,4 @@
 flask>=3.1
 waitress>=3.0
+PyYAML>=6.0      # *.custom.yaml patch 解析/序列化（safe_load/safe_dump，纯文本）
+croniter>=2.0    # 基座自动更新的 cron 排期

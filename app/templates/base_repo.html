@@ -24,15 +24,67 @@
   <div class="muted small" style="margin-top:8px">
     重建规则：基座文件覆盖 <span class="chip">base</span> 来源；其他来源（publish / upload /
     migrate）默认受保护跳过，勾选「覆盖受保护文件」才会被基座接管。
-    上一轮 base 来源但本轮已消失的文件会被移除；重建后自动重放
-    <span class="mono">rime_ice.dict.yaml</span> 的 import_tables 联动。
+    上一轮 base 来源但本轮已消失的文件会被移除（含白名单过滤掉的 .github、文档等开发文件）；
+    重建后自动重放 <span class="mono">rime_ice.dict.yaml</span> 的 import_tables 联动。
+  </div>
+  <div class="form-row" style="margin-top:8px">
+    <md-text-button class="error-text danger-action"
+            data-post="/base/reclone"
+            data-confirm="删除本地基座目录并重新克隆？历史分叉或换仓库时使用；基座外的文件不受影响。"
+            data-refresh="baseUpdated">删除基座重新克隆</md-text-button>
+  </div>
+</div>
+
+<div class="card">
+  <h2 class="md-typescale-title-medium">更新地址与自动更新</h2>
+  <form class="form-row" hx-post="/base/repo" hx-swap="none">
+    <md-outlined-text-field name="repo_url" label="git 仓库地址（http/https）"
+                            value="{{ origin or status.url }}" style="flex:1;min-width:280px"
+                            required></md-outlined-text-field>
+    <md-filled-button type="submit">保存地址</md-filled-button>
+  </form>
+  <form class="form-row" style="margin-top:14px" hx-post="/base/schedule" hx-swap="none">
+    <label class="small muted">自动更新
+      <input type="checkbox" name="enabled" class="file-input-plain"
+             {{ 'checked' if schedule.enabled }}>
+    </label>
+    <md-outlined-text-field name="cron" label="cron 表达式（服务器本地时间）"
+                            value="{{ schedule.cron }}" style="width:180px"></md-outlined-text-field>
+    <md-filled-button type="submit">保存计划</md-filled-button>
+    <span class="muted small">
+      {% if schedule.enabled %}
+        {% if schedule.cron_ok is false %}
+          <span class="chip err">cron 表达式无效，暂不执行</span>
+        {% else %}
+          下次执行：{{ schedule.next_run | epoch_fmt }}
+        {% endif %}
+      {% else %}当前关闭{% endif %}
+      {% if schedule.last %}
+        · 上次（{{ schedule.last.time }}）：
+        {% if schedule.last.ok %}{{ schedule.last.detail }}{% else %}
+          <span class="error-text">{{ schedule.last.detail }}</span>{% endif %}
+      {% endif %}
+    </span>
+  </form>
+  <div class="muted small" style="margin-top:8px">
+    自动更新按 cron 到点执行与上方按钮相同的「拉取 + 重建」流程；执行结果记入活动历史。
+    换了历史不兼容的仓库时用「删除基座重新克隆」。
   </div>
 </div>
 
 <div id="base-report"></div>
 
+<form class="card form-row" method="get" action="/base">
+  <label class="small muted">搜索
+    <md-outlined-text-field type="search" name="q" value="{{ q }}"></md-outlined-text-field>
+  </label>
+  <span class="muted small">rime-ice 基座文件共 {{ base_rows | length }} 个（已按白名单过滤，
+    只含词库 / lua / opencc / 方案配置；自定义内容在<a href="/files">词库文件</a>页）</span>
+</form>
+
 <div class="card" id="base-table"
-     hx-get="/base/table" hx-trigger="baseUpdated from:body" hx-swap="innerHTML">
+     hx-get="/base/table?q={{ q | urlencode }}" hx-trigger="baseUpdated from:body"
+     hx-swap="innerHTML">
   {% include "partials/base_table.html" %}
 </div>
 {% endblock %}

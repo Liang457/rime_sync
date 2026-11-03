@@ -20,6 +20,9 @@ DEFAULTS: dict = {
     },
     "base": {
         "repo_url": "https://github.com/iDvel/rime-ice",
+        # 基座自动更新：默认关，在「上游基座」页开启；cron 为服务器本地时间
+        "auto_update": False,
+        "cron": "0 4 * * *",
     },
     "limits": {
         "max_upload_mb": 512,
@@ -93,6 +96,37 @@ class Settings:
     @property
     def base_repo_url(self) -> str:
         return self.data["base"]["repo_url"]
+
+    @property
+    def base_auto_update(self) -> bool:
+        return bool(self.data["base"].get("auto_update"))
+
+    @property
+    def base_cron(self) -> str:
+        return str(self.data["base"].get("cron", ""))
+
+    def set_base_repo_url(self, url: str) -> None:
+        url = (url or "").strip().rstrip("/")
+        if not (url.startswith("https://") or url.startswith("http://")):
+            raise ValueError("仓库地址必须是 http(s):// 开头")
+        with self._lock:
+            self.data["base"]["repo_url"] = url
+        self.save()
+
+    def set_base_schedule(self, enabled: bool, cron: str) -> None:
+        """保存自动更新开关与 cron 表达式；开启时表达式必须合法。"""
+        cron = (cron or "").strip()
+        if enabled:
+            try:
+                from croniter import croniter
+
+                croniter(cron)  # 仅校验格式
+            except Exception as e:
+                raise ValueError(f"cron 表达式无效：{cron or '（空）'}") from e
+        with self._lock:
+            self.data["base"]["auto_update"] = bool(enabled)
+            self.data["base"]["cron"] = cron
+        self.save()
 
     # ---- API token（可多个，设备页管理） -----------------------------------
 

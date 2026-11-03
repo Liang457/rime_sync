@@ -1,0 +1,36 @@
+{# 源码模式：直接编辑文件内容（.custom.yaml 与普通配置文件共用） #}
+<form hx-post="/configs/save" hx-target="#editor" hx-swap="innerHTML">
+  <input type="hidden" name="path" value="{{ path }}">
+  <md-outlined-text-field class="editor-field" type="textarea" name="content"
+                          rows="22" spellcheck="false">{{ content }}</md-outlined-text-field>
+  <div class="form-row" style="margin-top:12px">
+    <md-filled-button type="submit">保存</md-filled-button>
+    <md-text-button href="/files/download/{{ path }}">下载</md-text-button>
+    <span class="muted small">保存即写入文件库并更新 manifest（sha3 变化 → 设备下次同步拉取）</span>
+  </div>
+</form>
+<form class="upload-overwrite" hx-post="/configs/upload" hx-encoding="multipart/form-data"
+      hx-target="#editor" hx-swap="innerHTML">
+  <input type="hidden" name="path" value="{{ path }}">
+  <input type="file" name="file" onchange="this.form.requestSubmit()"
+         class="file-input-plain">
+  <span class="muted small">或选择本地文件直接覆盖此文件</span>
+</form>
+<script>
+/* @material/web 文本框「初始值 = 子节点文本」的迁移在部分时序下不生效
+   （整页加载与 htmx 局部刷新都观察到 value 为空），这里兜底补一次：
+   等组件定义就绪后，value 为空且子节点有内容时，手动把内容写进 value。 */
+(function () {
+  function fix() {
+    document.querySelectorAll('#editor md-outlined-text-field.editor-field')
+      .forEach(function (md) {
+        if (!md.value) {
+          var t = (md.textContent || '').trim();
+          if (t) md.value = t;
+        }
+      });
+  }
+  if (customElements.get('md-outlined-text-field')) fix();
+  else customElements.whenDefined('md-outlined-text-field').then(fix);
+})();
+</script>

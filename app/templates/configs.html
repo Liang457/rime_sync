@@ -4,26 +4,41 @@
 {% block content %}
 <div class="configs-layout">
   <div class="card">
-    <h2 class="md-typescale-title-medium">配置文件（{{ config_rels | length }}）</h2>
+    <h2 class="md-typescale-title-medium">配置文件（{{ custom_rels | length + other_rels | length }}）</h2>
     <ul class="file-list">
-      {% for rel in config_rels %}
+      {% if custom_rels %}
+      <li class="muted small" style="padding:6px 10px 2px">定制补丁（改这里，基座更新不覆盖）</li>
+      {% for rel in custom_rels %}
       <li><a href="/configs?path={{ rel | urlencode }}" class="mono {{ 'current' if rel == current_path }}"
              hx-get="/configs/editor?path={{ rel | urlencode }}" hx-target="#editor" hx-swap="innerHTML">{{ rel }}</a></li>
-      {% else %}
-      <li class="empty">还没有配置文件。用下方表单新建，或从上游基座重建。</li>
       {% endfor %}
+      {% endif %}
+      {% if other_rels %}
+      <li class="muted small" style="padding:10px 10px 2px">基座与方案文件（改动会被基座更新覆盖）</li>
+      {% for rel in other_rels %}
+      <li><a href="/configs?path={{ rel | urlencode }}" class="mono {{ 'current' if rel == current_path }}"
+             hx-get="/configs/editor?path={{ rel | urlencode }}" hx-target="#editor" hx-swap="innerHTML">{{ rel }}</a></li>
+      {% endfor %}
+      {% endif %}
+      {% if not custom_rels and not other_rels %}
+      <li class="empty">还没有配置文件。用下方表单新建，或从上游基座重建。</li>
+      {% endif %}
     </ul>
     <form class="form-row" style="margin-top:14px" hx-post="/configs/create" hx-swap="none">
       <md-outlined-text-field name="path" label="新文件路径，如 default.custom.yaml"
                               style="flex:1" required></md-outlined-text-field>
       <md-outlined-button type="submit">新建</md-outlined-button>
     </form>
+    <div class="muted small" style="margin-top:8px">
+      定制统一走 <span class="mono">*.custom.yaml</span> 补丁（如 default.custom.yaml 对应
+      default.yaml）：常用项在「常用设置」里点选，其余在「源码」里手写；补丁文件不受基座更新影响。
+    </div>
   </div>
 
   <div class="card" id="editor">
     {% if editor %}
       {% with path=editor.path, content=editor.content, meta=editor.meta,
-              saved=editor.saved, revision=editor.revision %}
+              saved=editor.saved, revision=editor.revision, custom=editor.custom %}
         {% include "partials/editor.html" %}
       {% endwith %}
     {% else %}

@@ -1,18 +1,24 @@
-<div class="muted small" style="margin-bottom:10px">
-  {% if status.cloned %}当前基座：{{ status.commit }}{% else %}基座未克隆{% endif %}
-  · base 来源文件 {{ base_rows | length }} 个
-</div>
 <table>
-  <thead><tr><th>路径</th><th>基座 commit</th><th>大小</th></tr></thead>
+  <thead>
+    <tr><th>路径</th><th>基座 commit</th><th>大小</th><th>SHA3（前 20）</th><th></th></tr>
+  </thead>
   <tbody>
   {% for r in base_rows %}
     <tr>
       <td class="mono">{{ r.path }}</td>
       <td class="mono muted">{{ r.version }}</td>
       <td>{{ r.size | human_size }}</td>
+      <td class="mono muted">{{ r.sha3 }}</td>
+      <td class="actions">
+        <a href="/files/download/{{ r.path }}"><md-text-button>下载</md-text-button></a>
+        <md-text-button class="error-text danger-action"
+                data-post="/files/delete" data-vals='{"path":"{{ r.path }}"}'
+                data-remove-row="1"
+                data-confirm="删除 {{ r.path }}？基座文件下次更新/重建时会恢复。">删除</md-text-button>
+      </td>
     </tr>
   {% else %}
-    <tr><td colspan="3" class="empty">暂无 base 来源文件——更新基座后这里会出现 rime-ice 的全部文件</td></tr>
+    <tr><td colspan="5" class="empty">暂无 base 来源文件——更新基座后这里会出现 rime-ice 的运行时文件</td></tr>
   {% endfor %}
   </tbody>
 </table>

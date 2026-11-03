@@ -8,20 +8,39 @@
   </div>
   {% if saved %}<span class="chip ok">已保存 · revision {{ revision }}</span>{% endif %}
 </div>
-<form hx-post="/configs/save" hx-target="#editor" hx-swap="innerHTML">
-  <input type="hidden" name="path" value="{{ path }}">
-  <md-outlined-text-field class="editor-field" type="textarea" name="content"
-                          rows="22" spellcheck="false">{{ content }}</md-outlined-text-field>
-  <div class="form-row" style="margin-top:12px">
-    <md-filled-button type="submit">保存</md-filled-button>
-    <md-text-button href="/files/download/{{ path }}">下载</md-text-button>
-    <span class="muted small">保存即写入文件库并更新 manifest（sha3 变化 → 设备下次同步拉取）</span>
-  </div>
-</form>
-<form class="upload-overwrite" hx-post="/configs/upload" hx-encoding="multipart/form-data"
-      hx-target="#editor" hx-swap="innerHTML">
-  <input type="hidden" name="path" value="{{ path }}">
-  <input type="file" name="file" onchange="this.form.requestSubmit()"
-         class="file-input-plain">
-  <span class="muted small">或选择本地文件直接覆盖此文件</span>
-</form>
+
+{% if meta.source == 'base' %}
+<div class="banner">基座文件：直接修改会在基座更新时被上游覆盖。定制请写到对应的
+  <span class="mono">*.custom.yaml</span> 补丁（左侧「定制补丁」分组）。</div>
+{% endif %}
+
+{% if custom %}
+  {% if custom.error %}
+    <div class="banner error-text">补丁文件解析失败：{{ custom.error }}。请在下方源码模式修正后再用表单。</div>
+    {% include "partials/config_source.html" %}
+  {% else %}
+    <div class="tabs">
+      <button type="button" class="tab active" data-tab="form">常用设置</button>
+      <button type="button" class="tab" data-tab="source">源码</button>
+    </div>
+    <div id="tab-form">
+      {% include "partials/config_form.html" %}
+    </div>
+    <div id="tab-source" hidden>
+      {% include "partials/config_source.html" %}
+    </div>
+    <script>
+    document.querySelectorAll('#editor .tab').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('#editor .tab').forEach(function (x) {
+          x.classList.toggle('active', x === b);
+        });
+        document.getElementById('tab-form').hidden = b.dataset.tab !== 'form';
+        document.getElementById('tab-source').hidden = b.dataset.tab !== 'source';
+      });
+    });
+    </script>
+  {% endif %}
+{% else %}
+  {% include "partials/config_source.html" %}
+{% endif %}
