@@ -37,7 +37,8 @@ def create_app(
     app.json.ensure_ascii = False
 
     app.register_blueprint(
-        api_bp(store, userdb, upstream, settings.token_ok, root)
+        api_bp(store, userdb, upstream, settings.token_ok,
+               settings.record_token_use, root)
     )
     app.register_blueprint(
         console_bp(store, userdb, upstream, settings, root)

@@ -49,8 +49,9 @@
       <thead><tr><th>设备</th><th>快照文件</th><th>最后推送</th></tr></thead>
       <tbody>
       {% for d in devices %}
+        {% set label = device_labels.get(d.device) %}
         <tr>
-          <td class="mono">{{ d.device }}</td>
+          <td class="mono">{% if label %}{{ label }}({{ d.device }}){% else %}{{ d.device }}{% endif %}</td>
           <td>{{ d.files }}（{{ d.size | human_size }}）</td>
           <td class="muted">{{ d.last_push or '从未' }}</td>
         </tr>
@@ -70,7 +71,7 @@
     <li>
       <time>{{ a.time[5:16] }}</time>
       <span class="chip kind-chip">{{ a.kind }}</span>
-      <span>{{ a.detail }}</span>
+      <span>{{ a.detail | dev_label }}</span>
     </li>
     {% else %}
     <li class="empty">暂无动态</li>

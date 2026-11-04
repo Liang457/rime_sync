@@ -26,7 +26,7 @@ SERVER_VERSION = "0.1.0"
 
 def api_bp(
     store: FileStore, userdb: UserDbStore, upstream: BaseManager,
-    token_ok, data_root: Path,
+    token_ok, record_use, data_root: Path,
 ) -> Blueprint:
     bp = Blueprint("api", __name__, url_prefix="/api")
     started = time.time()
@@ -35,8 +35,11 @@ def api_bp(
     def _auth():
         if request.path == "/api/health":
             return None
-        if not token_ok(request.headers.get("X-Api-Token", "")):
+        token = request.headers.get("X-Api-Token", "")
+        if not token_ok(token):
             return jsonify({"ok": False, "error": "缺少或错误的 X-Api-Token"}), 401
+        # 记录 token 使用痕迹（push/pull 的 device 参数在 form 或 args 里）
+        record_use(token, request.values.get("device", ""))
         return None
 
     @bp.errorhandler(413)

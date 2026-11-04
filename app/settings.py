@@ -162,6 +162,30 @@ class Settings:
             self.save()
         return removed
 
+    def record_token_use(self, got: str, device: str = "") -> None:
+        """API 鉴权命中后记录使用痕迹：last_used 时间与（带 device 参数时）
+        上次使用的设备 id。命中旧版 api_token（无条目）不记录；
+        内容没变化不落盘，避免每次 API 请求都写 server.json。"""
+        entry = None
+        for t in self.tokens:
+            if hmac.compare_digest(got, t.get("token", "")):
+                entry = t
+                break
+        if entry is None:
+            return
+        device = (device or "").strip()
+        now = self._now_iso()
+        with self._lock:
+            changed = False
+            if entry.get("last_used") != now:
+                entry["last_used"] = now
+                changed = True
+            if device and entry.get("last_used_device") != device:
+                entry["last_used_device"] = device
+                changed = True
+        if changed:
+            self.save()
+
     def token_ok(self, got: str) -> bool:
         """未配置任何 token 时视为不启用认证；否则须命中旧 api_token 或任一 token。"""
         if not self.api_token and not self.tokens:

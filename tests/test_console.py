@@ -216,6 +216,76 @@ def test_token_file_persisted(env):
     assert cfg["server"]["tokens"][0]["label"] == "pad"
 
 
+# ---- 设备备注名显示（token last_used_device → 备注(id)）---------------------
+
+
+def _mk_device(userdb, name):
+    d = userdb.root / name
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "a.txt").write_text("x", encoding="utf-8")
+
+
+def test_device_label_shown(env):
+    """有备注的设备显示 备注(id)，无备注仍裸 id；删除参数保持设备 id。"""
+    app, client, root = env
+    userdb = app.extensions["userdb"]
+    settings = app.extensions["settings"]
+    _mk_device(userdb, "dev-a")
+    _mk_device(userdb, "dev-b")
+    settings.add_token("手机")
+    settings.tokens[0]["last_used_device"] = "dev-a"
+    settings.save()
+    # 首页设备栏
+    home = client.get("/").data
+    assert "手机(dev-a)".encode() in home
+    assert "dev-b".encode() in home
+    # 设备页整页 + htmx 局部刷新
+    page = client.get("/devices").data
+    assert "手机(dev-a)".encode() in page
+    table = client.get("/devices/table").data
+    assert "手机(dev-a)".encode() in table
+    assert "dev-b".encode() in table
+    assert 'data-vals=\'{"device":"dev-a"}\''.encode() in table
+    assert "删除设备 手机(dev-a) 的全部快照".encode() in table
+
+
+def test_dashboard_activity_dev_label(env):
+    """最近动态明细里的设备 id 在渲染时替换为 备注(id)。"""
+    app, client, root = env
+    settings = app.extensions["settings"]
+    settings.add_token("手机")
+    settings.tokens[0]["last_used_device"] = "dev-a"
+    settings.save()
+    app.extensions["store"].activity("userdb", "dev-a push 2 个文件")
+    home = client.get("/").data
+    assert "手机(dev-a) push 2 个文件".encode() in home
+
+
+def test_tokens_table_last_used(env):
+    app, client, root = env
+    settings = app.extensions["settings"]
+    settings.add_token("手机")
+    settings.tokens[0].update({"last_used": "2026-11-04T10:00:00+08:00",
+                               "last_used_device": "dev-a"})
+    settings.save()
+    html = client.get("/devices/tokens/table").data
+    assert "上次使用".encode() in html and "上次设备".encode() in html
+    assert "2026-11-04 10:00:00".encode() in html
+    assert "dev-a".encode() in html
+
+
+def test_device_delete_toast_with_label(env):
+    app, client, root = env
+    userdb = app.extensions["userdb"]
+    settings = app.extensions["settings"]
+    _mk_device(userdb, "dev-a")
+    settings.add_token("手机")
+    settings.tokens[0]["last_used_device"] = "dev-a"
+    settings.save()
+    r = client.post("/devices/delete", data={"device": "dev-a"})
+    assert "已删除设备 手机(dev-a)" in toast_of(r)
+
+
 # ---- 登录 -----------------------------------------------------------------
 
 

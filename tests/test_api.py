@@ -1,5 +1,6 @@
 """API 端点：认证、manifest、下载、publish 幂等、userdb 推拉、health/status。"""
 import io
+import json
 import tarfile
 
 
@@ -62,6 +63,36 @@ def test_multiple_tokens_all_accepted(env):
     settings.remove_token(t1["token"])
     assert client.get("/api/manifest",
                       headers={"X-Api-Token": t1["token"]}).status_code == 401
+
+
+def test_token_use_recorded(env):
+    """鉴权命中后记录 last_used 与（带 device 参数时）last_used_device。"""
+    app, client, root = env
+    settings = app.extensions["settings"]
+    t = settings.add_token("phone")
+    r = client.post("/api/userdb/push", data={
+        "device": "dev-a",
+        "tar": (make_tar_gz({"a.txt": "x"}), "sync.tar.gz"),
+    }, content_type="multipart/form-data",
+       headers={"X-Api-Token": t["token"]})
+    assert r.status_code == 200
+    entry = settings.tokens[0]
+    assert entry["last_used"] and entry["last_used_device"] == "dev-a"
+    # 不带 device 的请求只更新时间，设备保持
+    client.get("/api/manifest", headers={"X-Api-Token": t["token"]})
+    assert settings.tokens[0]["last_used_device"] == "dev-a"
+    assert settings.tokens[0]["last_used"]
+    # 落盘验证
+    cfg = json.loads((root / "config" / "server.json").read_text("utf-8"))
+    assert cfg["server"]["tokens"][0]["last_used_device"] == "dev-a"
+
+
+def test_legacy_token_use_not_recorded(tokened_env):
+    """旧版单 api_token 无条目结构，使用不记录也不报错。"""
+    app, client, root = tokened_env
+    assert client.get("/api/manifest",
+                      headers={"X-Api-Token": "sekrit"}).status_code == 200
+    assert app.extensions["settings"].tokens == []
 
 
 def test_publish_links_rime_ice(env):

@@ -86,6 +86,28 @@ def console_bp(
         except (ValueError, OSError, OverflowError):
             return "—"
 
+    def _device_labels() -> dict[str, str]:
+        """installation_id → token 备注名；同设备多条 token 时取最近使用的。
+        依据 token 条目上的 last_used_device（API 鉴权时记录），纯显示层映射。"""
+        used = [t for t in settings.tokens
+                if t.get("label") and t.get("last_used_device")]
+        used.sort(key=lambda t: t.get("last_used") or "", reverse=True)
+        return {t["last_used_device"]: t["label"] for t in used}
+
+    def _dev_show(name: str) -> str:
+        """设备的显示名：有备注名给 备注(id)，没有就裸 id。"""
+        label = _device_labels().get(name)
+        return f"{label}({name})" if label else name
+
+    @bp.app_template_filter("dev_label")
+    def _dev_label(text: str) -> str:
+        """把文本里出现的设备 id 替换为 备注(id)——最近动态、confirm
+        文案等历史内容也能在显示层受益。"""
+        for dev, label in _device_labels().items():
+            if dev in text:
+                text = text.replace(dev, f"{label}({dev})")
+        return text
+
     def toast(message: str | None, tone: str = "ok", **extra_events) -> dict:
         """htmx 动作反馈：中文 toast 数据走 percent-encoded X-Toast-Data 头
         （HTTP 头仅 latin-1，不能直接放中文），HX-Trigger 只承载 ASCII 事件名。"""
@@ -144,6 +166,7 @@ def console_bp(
             "dashboard.html",
             stats=stats,
             devices=userdb.devices(),
+            device_labels=_device_labels(),
             activity=store.recent_activity(12),
             disk={"free": usage.free, "total": usage.total},
             base_status=upstream.status(),
@@ -638,25 +661,28 @@ def console_bp(
     @bp.route("/devices")
     def devices_page():
         return render_template("devices.html", devices=userdb.devices(),
-                               tokens=settings.tokens)
+                               tokens=settings.tokens,
+                               device_labels=_device_labels())
 
     @bp.route("/devices/table")
     def devices_table():
         return respond("partials/devices_table.html",
-                       {"devices": userdb.devices()})
+                       {"devices": userdb.devices(),
+                        "device_labels": _device_labels()})
 
     @bp.route("/devices/delete", methods=["POST"])
     def devices_delete():
         name = request.form.get("device", "")
+        show = _dev_show(name)
         try:
             ok = userdb.delete_device(name)
         except ValueError as e:
             return "", 200, toast(str(e), "err")
         if not ok:
-            return "", 200, toast(f"设备 {name} 不存在", "err")
+            return "", 200, toast(f"设备 {show} 不存在", "err")
         store.activity("userdb", f"删除设备 {name}")
         # 前端 danger-action fetch 直发后触发 devicesUpdated 事件自刷新表格
-        return "", 200, toast(f"已删除设备 {name}", devicesUpdated={})
+        return "", 200, toast(f"已删除设备 {show}", devicesUpdated={})
 
     # ---- API token 管理（多 token，设备页） -----------------------------------
 
