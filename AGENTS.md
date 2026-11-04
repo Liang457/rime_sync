@@ -189,6 +189,6 @@ python manage.py import-runtime <旧runtime目录>   # source=migrate 入库
 python manage.py import-sync <旧sync目录>          # 设备快照 + devices.json 元数据
 ```
 
-`makedict/`、`runtime/`、`sync/` 在迁移完成前不要手删。`makedict/` 是 v1
-遗留目录，保留原因是 `rime_dict/research/fetch_glossary_wiki.py` 硬编码引用
-其中的 Wiki 爬虫；服务器运行时不碰它，也不要把它接进任何服务端流程。
+`runtime/`、`sync/` 在迁移完成前不要手删。v1 遗留的 `makedict/` Wiki 爬虫
+已于 2026-11-04 整体迁往 `rime_dict/makedict/`（`fetch_glossary_wiki.py` 已
+改指仓内路径），本仓库不再保留；词库生成的任何工具都不要接进服务端流程。

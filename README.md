@@ -13,9 +13,9 @@ rime_dict（本地数据工程）──publish──▶ rime_sync 服务器 ◀�
 ```
 
 本仓库是 v2 全量重构版：v1 的 makedict 脚本执行、remote_sync 编排、行号配置
-编辑、22 端点全部移除（旧实现见 git 历史）。`makedict/` 目录保留，是因为
-`rime_dict/research/fetch_glossary_wiki.py` 直接引用其中的 Wiki 爬虫——它现在
-只作为 rime_dict 的本地爬虫库，服务器运行时完全不碰它。
+编辑、22 端点全部移除（旧实现见 git 历史）。v1 遗留的 `makedict/` Wiki 爬虫
+已于 2026-11-04 整体迁往 `rime_dict` 仓库（`rime_dict/makedict/`），本仓库
+不再保留。
 
 ## 功能
 
