@@ -193,3 +193,39 @@ def test_activity_capped(store):
         store.activity("files", f"op-{i}")
     assert len(store.recent_activity(200)) <= 100
     assert store.recent_activity(1)[0]["detail"] == "op-119"
+
+
+# ---- 标注变更与跳过 ---------------------------------------------------------
+
+
+def test_relabel_bumps_revision_without_content_change(store):
+    """内容不变但 source/version 标注变了：status 仍 unchanged，
+    但按设计要算一次 manifest 修订（控制台接管/版本推进依赖此行为）。"""
+    store.add_many([AddItem("f.yaml", b"same", source="upload", version="v1")])
+    rev = store.revision
+    rs = store.add_many([AddItem("f.yaml", b"same", source="console", version="v2")])
+    assert rs[0]["status"] == "unchanged"
+    assert store.revision == rev + 1
+    meta = store.manifest()["files"]["f.yaml"]
+    assert meta["source"] == "console" and meta["version"] == "v2"
+
+
+def test_rebuild_base_relabels_unchanged_version(store, tmp_path):
+    """base 来源同内容、version 变化 → unchanged 计数，但 manifest 版本更新。"""
+    store.add_many([AddItem("f.yaml", b"same", source="base", version="c1")])
+    rev = store.revision
+    incoming = _mk_base(tmp_path, {"f.yaml": "same"})
+    report = store.rebuild_base(incoming, version="c2")
+    assert report["unchanged"] == 1
+    assert store.revision == rev + 1
+    assert store.manifest()["files"]["f.yaml"]["version"] == "c2"
+
+
+def test_import_zip_skips_bad_paths(store):
+    """zip 内路径非法的成员进 skipped，其余正常入库。"""
+    zf = _zip_bytes({"ok.yaml": "fine", "../evil.yaml": "bad", "x:.yaml": "bad"})
+    report = store.import_zip(zf, source="upload")
+    assert report["added"] == 1
+    assert {s["path"] for s in report["skipped"]} == {"../evil.yaml", "x:.yaml"}
+    assert "ok.yaml" in store.manifest()["files"]
+    assert "evil.yaml" not in store.manifest()["files"]

@@ -169,6 +169,7 @@ def test_files_get_batch_and_all(env):
 
     r = client.get("/api/files/get?paths=a.yaml,dir/b.yaml")
     assert r.status_code == 200
+    assert r.headers["X-File-Count"] == "2"
     assert read_tar_gz(r.data) == {"a.yaml": b"A", "dir/b.yaml": b"B"}
 
     r = client.get("/api/files/get?paths=a.yaml,ghost.yaml")
@@ -207,6 +208,28 @@ def test_userdb_roundtrip(env):
     r = client.post("/api/userdb/push", data={"tar": (make_tar_gz({"x": "x"}), "t")},
                     content_type="multipart/form-data")
     assert r.status_code == 400  # 缺 device
+
+    # 坏 tar（非 gzip 数据）→ 400 且错误可读
+    r = client.post("/api/userdb/push?device=ok-dev",
+                    data={"tar": (io.BytesIO(b"definitely not a tar"), "x.tar.gz")},
+                    content_type="multipart/form-data")
+    assert r.status_code == 400
+    assert "tar 解析失败" in r.get_json()["error"]
+
+    # 非法设备名（路径穿越）→ 400
+    r = client.post("/api/userdb/push?device=../evil",
+                    data={"tar": (make_tar_gz({"a": "b"}), "s.tar.gz")},
+                    content_type="multipart/form-data")
+    assert r.status_code == 400
+
+
+def test_publish_payload_too_large(env):
+    """超过 MAX_CONTENT_LENGTH → 413 的 JSON 错误（蓝图级 errorhandler）。"""
+    app, client, root = env
+    app.config["MAX_CONTENT_LENGTH"] = 200
+    r = publish(client, "big.dict.yaml", b"x" * 500)
+    assert r.status_code == 413
+    assert r.get_json()["ok"] is False
 
 
 # ---- status ---------------------------------------------------------------

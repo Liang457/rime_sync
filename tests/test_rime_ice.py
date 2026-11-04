@@ -145,6 +145,65 @@ def test_toggle_preserves_comments(env):
     assert "#- cn_dicts/41448  # 大字表（按需启用）" in text
 
 
+# ---- 行内形式（import_tables: [a, b]）------------------------------------------
+
+
+def test_toggle_inline_form(env):
+    """手写行内形式的开关：sync 增补、关闭、再启用都保持行内书写风格。"""
+    app, client, root = env
+    store = app.extensions["store"]
+    _add_main(store, "import_tables: [cn_dicts/8105, cn_dicts/tencent]\n")
+    _add_dict(store, "mine")
+    report = rime_ice.sync_import_tables(store)
+    assert report["changed"] is True
+    assert "import_tables: [cn_dicts/8105, cn_dicts/tencent, cn_dicts/mine]" \
+        in _read(store)
+
+    # 关闭腾讯词向量 → 行内条目减少
+    report = rime_ice.toggle_table(store, "cn_dicts/tencent", False)
+    assert report["removed"] == ["cn_dicts/tencent"]
+    text = _read(store)
+    assert "tencent" not in text
+    assert text.startswith("import_tables: [cn_dicts/8105, cn_dicts/mine]\n")
+    state = json.loads((root / "store" / "imports.json").read_text("utf-8"))
+    assert state["disabled"] == ["cn_dicts/tencent"]
+
+    # 再启用（文件补回库后）→ 行内追加末尾
+    _add_dict(store, "tencent", source="base")
+    report = rime_ice.toggle_table(store, "cn_dicts/tencent", True)
+    text = _read(store)
+    assert "import_tables: [cn_dicts/8105, cn_dicts/mine, cn_dicts/tencent]" in text
+    state = json.loads((root / "store" / "imports.json").read_text("utf-8"))
+    assert state["disabled"] == []
+    assert state["enabled"] == ["cn_dicts/tencent"]
+
+
+def test_inline_form_digit_table_inserted_after_8105(env):
+    """行内形式启用字表类（纯数字名）→ 紧跟 8105 之后而非追加末尾。"""
+    app, client, root = env
+    store = app.extensions["store"]
+    _add_main(store, "import_tables: [cn_dicts/8105, cn_dicts/others]\n")
+    _add_dict(store, "41448", source="base")
+    report = rime_ice.toggle_table(store, "cn_dicts/41448", True)
+    assert report["added"] == ["cn_dicts/41448"]
+    assert "import_tables: [cn_dicts/8105, cn_dicts/41448, cn_dicts/others]" \
+        in _read(store)
+
+
+# ---- 裸名条目的归一化边界 ---------------------------------------------------------
+
+
+def test_bare_entry_without_cn_dicts_file_kept(env):
+    """根目录手挂的裸名条目（cn_dicts 下无对应文件）保持原样，不被强制升级。"""
+    app, client, root = env
+    store = app.extensions["store"]
+    _add_main(store, "import_tables:\n  - 8105\n  - mydict\n")
+    report = rime_ice.sync_import_tables(store)
+    assert report["changed"] is False
+    text = _read(store)
+    assert "\n  - mydict\n" in text          # 条目原样保留
+
+
 # ---- 基座重建后重放 -------------------------------------------------------------
 
 

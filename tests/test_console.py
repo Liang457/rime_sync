@@ -147,21 +147,61 @@ def test_config_rejects_bad_path(env):
     assert "非法" in toast_of(r)
 
 
-# ---- 上游基座（假 git）------------------------------------------------------
+# ---- 上游基座（记录型 git 桩 + 命令白名单守护）--------------------------------
 
 
-def _patch_git(monkeypatch, upstream, output="deadbee fix: initial"):
-    monkeypatch.setattr(type(upstream), "cloned", property(lambda self: True))
-    monkeypatch.setattr(upstream, "run_git", lambda *a, **k: output)
+def _fake_git(monkeypatch, upstream, output="deadbee fix: initial", fail=None):
+    """把 run_git 换成记录型桩：逐条记录发出的命令并返回固定输出；
+    clone 命令顺带建出 base_dir（模拟克隆副作用）。fail 非空时一律抛 GitError。
+    返回命令记录列表，供 assert_git_readonly 守护 git 边界。"""
+    commands: list[list[str]] = []
+
+    def fake_run_git(*args, **kwargs):
+        if fail is not None:
+            raise GitError(fail)
+        commands.append(list(args))
+        if args[0] == "clone":
+            upstream.base_dir.mkdir(parents=True, exist_ok=True)
+        return output
+
+    monkeypatch.setattr(upstream, "run_git", fake_run_git)
+    return commands
 
 
-def test_base_update_with_fake_git(env, tmp_path, monkeypatch):
+def _mark_cloned(upstream) -> None:
+    """cloned property 靠 .git 目录存在判定，建出它来模拟「已克隆」状态。"""
+    (upstream.base_dir / ".git").mkdir(parents=True, exist_ok=True)
+
+
+def assert_git_readonly(commands) -> None:
+    """AGENTS.md 红线的测试化：上游基座只允许 clone --depth 1 / pull --ff-only
+    与只读查询（log、remote get/set-url），绝不出现 push 或其他命令。"""
+    assert commands, "桩 git 未收到任何命令"
+    for args in commands:
+        assert "push" not in args, f"出现了 push：{args}"
+        if args[0] == "clone":
+            assert args[1:3] == ["--depth", "1"], f"clone 必须浅克隆：{args}"
+        elif args[0] == "-C":
+            if args[2] == "pull":
+                assert args[3:] == ["--ff-only"], \
+                    f"pull 必须带 --ff-only：{args}"
+            elif args[2] == "log":
+                assert args[3:] == ["-1", "--oneline"], f"意外命令：{args}"
+            elif args[2] == "remote":
+                assert args[3] in ("get-url", "set-url") and args[4] == "origin", \
+                    f"意外命令：{args}"
+            else:
+                raise AssertionError(f"白名单外的 git 命令：{args}")
+        else:
+            raise AssertionError(f"白名单外的 git 命令：{args}")
+
+
+def test_base_update_with_fake_git(env, monkeypatch):
     app, client, root = env
     upstream = app.extensions["upstream"]
-    base_dir = upstream.base_dir
-    base_dir.mkdir(parents=True)
-    (base_dir / "default.yaml").write_text("base new", encoding="utf-8")
-    _patch_git(monkeypatch, upstream)
+    _mark_cloned(upstream)
+    (upstream.base_dir / "default.yaml").write_text("base new", encoding="utf-8")
+    cmds = _fake_git(monkeypatch, upstream)
 
     r = client.post("/base/update", data={})
     assert r.status_code == 200
@@ -169,15 +209,30 @@ def test_base_update_with_fake_git(env, tmp_path, monkeypatch):
     manifest = json.loads((root / "store" / "manifest.json").read_text("utf-8"))
     assert manifest["files"]["default.yaml"]["source"] == "base"
     assert (root / "store" / "files" / "default.yaml").read_text("utf-8") == "base new"
+    assert_git_readonly(cmds)
+    assert cmds[0][2] == "pull"          # 已克隆 → 拉取而非克隆
+
+
+def test_base_update_clones_when_missing(env, monkeypatch):
+    """基座目录不存在（未克隆）→ 走 clone --depth 1 分支而非 pull。"""
+    app, client, root = env
+    upstream = app.extensions["upstream"]
+    assert upstream.cloned is False
+    cmds = _fake_git(monkeypatch, upstream)
+
+    r = client.post("/base/update", data={})
+    assert r.status_code == 200
+    assert cmds[0][0] == "clone"
+    assert cmds[0][1:3] == ["--depth", "1"]
+    assert_git_readonly(cmds)
 
 
 def test_base_protects_console_files(env, monkeypatch):
     app, client, root = env
     upstream = app.extensions["upstream"]
-    base_dir = upstream.base_dir
-    base_dir.mkdir(parents=True)
-    (base_dir / "default.yaml").write_text("base ver", encoding="utf-8")
-    _patch_git(monkeypatch, upstream)
+    _mark_cloned(upstream)
+    (upstream.base_dir / "default.yaml").write_text("base ver", encoding="utf-8")
+    _fake_git(monkeypatch, upstream)
 
     upload_file(client, "default.yaml", b"my local patch")
     r = client.post("/base/update", data={})
@@ -191,12 +246,8 @@ def test_base_protects_console_files(env, monkeypatch):
 def test_base_git_error_surfaces(env, monkeypatch):
     app, client, root = env
     upstream = app.extensions["upstream"]
-
-    def boom(*a, **k):
-        raise GitError("网络不通")
-
-    monkeypatch.setattr(type(upstream), "cloned", property(lambda self: True))
-    monkeypatch.setattr(upstream, "run_git", boom)
+    _mark_cloned(upstream)
+    _fake_git(monkeypatch, upstream, fail="网络不通")
     r = client.post("/base/update", data={})
     assert "失败" in toast_of(r)
 
@@ -366,7 +417,8 @@ def test_base_update_filters_whitelist_and_cleans_legacy(env, monkeypatch):
     gh = base_dir / ".github" / "workflows"
     gh.mkdir(parents=True)
     (gh / "release.yml").write_text("wf", encoding="utf-8")
-    _patch_git(monkeypatch, upstream)
+    _mark_cloned(upstream)
+    cmds = _fake_git(monkeypatch, upstream)
 
     r = client.post("/base/update", data={})
     assert r.status_code == 200
@@ -376,6 +428,7 @@ def test_base_update_filters_whitelist_and_cleans_legacy(env, monkeypatch):
     assert "README.md" not in manifest["files"]
     assert ".github/workflows/release.yml" not in manifest["files"]
     assert "AGENTS.md" not in manifest["files"]     # 旧垃圾被清退
+    assert_git_readonly(cmds)
 
 
 # ---- 基座更新地址与自动更新（P2）---------------------------------------------
@@ -422,13 +475,15 @@ def test_base_reclone_route(env, monkeypatch):
     store.add_many([AddItem("default.yaml", b"v", source="base"),
                     AddItem("default.custom.yaml", b"patch: {}\n", source="console")])
     upstream = app.extensions["upstream"]
-    upstream.base_dir.mkdir(parents=True)
+    _mark_cloned(upstream)
     (upstream.base_dir / "default.yaml").write_text("v", encoding="utf-8")
-    _patch_git(monkeypatch, upstream)
+    cmds = _fake_git(monkeypatch, upstream)
 
     r = client.post("/base/reclone", data={})
     assert "重新克隆完成" in toast_of(r)
     assert "baseUpdated" in r.headers["HX-Trigger"]
+    assert cmds[0][0] == "clone" and cmds[0][1:3] == ["--depth", "1"]
+    assert_git_readonly(cmds)
     manifest = json.loads((root / "store" / "manifest.json").read_text("utf-8"))
     # 假 git 克隆产物为空 → base 清退；console 来源的补丁文件不受影响
     assert "default.yaml" not in manifest["files"]
@@ -625,3 +680,64 @@ def test_configs_page_preset_section_and_banner(env):
     client.post("/configs/preset", data={"name": "weasel.custom.yaml"})
     r = client.get("/configs?path=weasel.yaml")
     assert "创建 weasel.custom.yaml".encode() not in r.data   # 建好后按钮消失
+
+
+# ---- 次要分支与错误反馈 --------------------------------------------------------
+
+
+def test_configs_upload_overwrites(env):
+    """编辑器上传覆盖已有文件：toast + 落盘内容变更 + source 保持 console。"""
+    app, client, root = env
+    upload_file(client, "default.custom.yaml", b"patch:\n  key: 1\n")
+    r = client.post("/configs/upload", data={
+        "path": "default.custom.yaml",
+        "file": (io.BytesIO(b"patch:\n  key: 9\n"), "default.custom.yaml"),
+    }, content_type="multipart/form-data")
+    assert "已覆盖" in toast_of(r)
+    disk = root / "store" / "files" / "default.custom.yaml"
+    assert b"key: 9" in disk.read_bytes()
+    manifest = json.loads((root / "store" / "manifest.json").read_text("utf-8"))
+    assert manifest["files"]["default.custom.yaml"]["source"] == "console"
+
+
+def test_base_repo_saved_even_when_git_fails(env, monkeypatch):
+    """git 切换远端失败：地址已保存进 server.json，toast 明确报错。"""
+    app, client, root = env
+    upstream = app.extensions["upstream"]
+    _mark_cloned(upstream)
+    _fake_git(monkeypatch, upstream, fail="网络不通")
+    r = client.post("/base/repo",
+                    data={"repo_url": "https://mirror.example.com/rime-ice"})
+    assert "切换远端失败" in toast_of(r)
+    cfg = json.loads((root / "config" / "server.json").read_text("utf-8"))
+    assert cfg["base"]["repo_url"] == "https://mirror.example.com/rime-ice"
+
+
+def test_missing_target_error_toasts(env):
+    """清单/库中没有对应对象时的错误 toast（各动作的错误分支）。"""
+    app, client, root = env
+    r = client.post("/configs/save", data={"path": "ghost.yaml", "content": ""})
+    assert "清单中没有" in toast_of(r)
+    r = client.post("/files/delete", data={"path": "ghost.yaml"})
+    assert "清单中没有" in toast_of(r)
+    r = client.post("/devices/delete", data={"device": "ghost"})
+    assert "不存在" in toast_of(r)
+    r = client.post("/devices/tokens/delete", data={"token": "rs_ghost"})
+    assert "token 不存在" in toast_of(r)
+
+
+def test_logout_requires_login_again(tmp_path):
+    root = tmp_path
+    settings_path = root / "config" / "server.json"
+    create_app(settings_path=settings_path, root_dir=root,
+               run_scheduler=False)  # 生成默认配置
+    _enable_console_password(root)
+    client = create_app(settings_path=settings_path, root_dir=root,
+                        run_scheduler=False).test_client()
+
+    client.post("/login", data={"password": "hunter2"})
+    assert client.get("/files").status_code == 200
+    r = client.get("/logout")
+    assert r.status_code == 302
+    r = client.get("/files")
+    assert r.status_code == 302 and "/login" in r.headers["Location"]
