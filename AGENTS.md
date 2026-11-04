@@ -88,7 +88,9 @@ htmx:afterRequest 监听解码后弹 toast）。若有新代码往响应头塞�
 `app/services/scheduler.py`：daemon 线程，cron 表达式驱动
 （`settings.base.auto_update` 加 `base.cron`，默认关；「上游基座」页开启）。
 纯逻辑 `check_once(now)` 与线程分离，测试注入时间；不追欠账，失败只记
-activity 不抛出。git 拉取与文件落库都是既有命令，无任何脚本执行。
+activity 不抛出。cron 字段按服务器本地墙钟解析——裸 epoch 直接喂 croniter
+会被按 UTC 匹配（凌晨两点变上午十点），须先转本地 aware datetime。git 拉取
+与文件落库都是既有命令，无任何脚本执行。
 
 ### rime_ice.py（词库联动与开关）
 

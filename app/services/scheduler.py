@@ -9,7 +9,9 @@
 - (enabled, cron) 变化即重排下次执行时间；不追欠账——关了很久再打开，从
   「现在」起算下一次，而不是把错过的轮次补跑一遍；
 - 执行结果写 store activity；失败不抛出（断网不能杀死线程），记录在
-  last 里供页面展示。
+  last 里供页面展示；
+- cron 字段按服务器本地墙钟匹配（裸 epoch 直接喂 croniter 会被按 UTC
+  解析，「0 2 */2 * *」会变成本地上午 10 点触发，见 _compute_next）。
 """
 from __future__ import annotations
 
@@ -66,7 +68,10 @@ class BaseUpdateScheduler:
             return None
         from croniter import croniter
 
-        return croniter(self.settings.base_cron, now).get_next(float)
+        # croniter 对裸 float 时间戳按 UTC 匹配字段，必须先转本地时间再排期，
+        # 触发比较仍在同一 epoch 空间进行，不受影响。
+        local = datetime.fromtimestamp(now).astimezone()
+        return croniter(self.settings.base_cron, local).get_next(float)
 
     def check_once(self, now: float) -> dict | None:
         """推进一次时钟：到期则执行基座更新。返回执行结果，未到期返回 None。"""

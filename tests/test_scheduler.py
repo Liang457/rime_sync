@@ -1,4 +1,6 @@
 """基座自动更新调度器：到期触发、cron 变更重排、失败兜底。"""
+from datetime import datetime, timedelta
+
 from app.services.scheduler import BaseUpdateScheduler
 
 
@@ -85,3 +87,16 @@ def test_invalid_cron_never_fires():
     assert s.status()["cron_ok"] is False
     assert s.check_once(3660.0) is None
     assert s.check_once(99999.0) is None
+
+
+def test_cron_matches_local_walltime():
+    """回归：裸 float 时间戳曾被 croniter 按 UTC 解析小时字段，导致
+    「0 2 */2 * *」在服务器本地上午 10 点触发。注入 epoch 的真实形态下，
+    下次执行必须精确落在本地墙钟 02:00。"""
+    base = datetime.now().astimezone().replace(
+        hour=1, minute=0, second=0, microsecond=0)          # 本地某日 01:00
+    expected = (base + timedelta(hours=1)).timestamp()      # 同日本地 02:00
+    s = BaseUpdateScheduler(FakeSettings(True, "0 2 * * *"),
+                            FakeUpstream(), FakeStore())
+    assert s.check_once(base.timestamp()) is None           # 只排期不触发
+    assert s.status()["next_run"] == expected

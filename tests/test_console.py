@@ -6,7 +6,7 @@ import urllib.parse
 
 import pytest
 
-from app import create_app
+from app import SERVER_VERSION, create_app
 from app.services.upstream import GitError
 
 
@@ -40,11 +40,11 @@ def test_about_shows_version(env):
     app, client, root = env
     r = client.get("/about")
     assert r.status_code == 200
-    assert b"2.0.0" in r.data
+    assert SERVER_VERSION.encode() in r.data
     # 侧边栏常驻版本号：任意页面（这里取首页）都带
-    assert b"2.0.0" in client.get("/").data
+    assert SERVER_VERSION.encode() in client.get("/").data
     # 与 /api/health 暴露给客户端的版本号一致
-    assert client.get("/api/health").get_json()["server_version"] == "2.0.0"
+    assert client.get("/api/health").get_json()["server_version"] == SERVER_VERSION
 
 
 # ---- 词库文件上传 / 删除 -----------------------------------------------------
