@@ -48,6 +48,9 @@ document.documentElement.classList.add(
       <a href="/devices" class="{{ 'active' if request.path.startswith('/devices') }}">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>
         设备</a>
+      <a href="/about" class="{{ 'active' if request.path.startswith('/about') }}">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+        关于</a>
     </nav>
     <div class="sidebar-foot">
       {% if console_protected %}
@@ -55,6 +58,7 @@ document.documentElement.classList.add(
       {% else %}
         <span class="muted small">免登录模式</span>
       {% endif %}
+      <a href="/about" style="display:block; margin-top:4px">v{{ server_version }}</a>
     </div>
   </aside>
   <main class="main">

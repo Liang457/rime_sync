@@ -28,12 +28,23 @@ def upload_file(client, rel, content, prefix="", **form):
 # ---- 页面 -----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("page", ["/", "/files", "/configs", "/base", "/devices"])
+@pytest.mark.parametrize("page", ["/", "/files", "/configs", "/base", "/devices", "/about"])
 def test_pages_render(env, page):
     app, client, root = env
     r = client.get(page)
     assert r.status_code == 200
     assert b"RIME" in r.data
+
+
+def test_about_shows_version(env):
+    app, client, root = env
+    r = client.get("/about")
+    assert r.status_code == 200
+    assert b"2.0.0" in r.data
+    # 侧边栏常驻版本号：任意页面（这里取首页）都带
+    assert b"2.0.0" in client.get("/").data
+    # 与 /api/health 暴露给客户端的版本号一致
+    assert client.get("/api/health").get_json()["server_version"] == "2.0.0"
 
 
 # ---- 词库文件上传 / 删除 -----------------------------------------------------

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import platform
 import re
 import shutil
 import time
@@ -18,6 +19,7 @@ from flask import (
     send_file, session, url_for,
 )
 
+from .api import SERVER_VERSION
 from .safe_path import safe_relpath
 from .services import config_options, custom_yaml, rime_ice
 from .services.store import AddItem, FileStore
@@ -66,7 +68,8 @@ def console_bp(
 
     @bp.app_context_processor
     def _inject():
-        return {"console_protected": bool(settings.password_hash)}
+        return {"console_protected": bool(settings.password_hash),
+                "server_version": SERVER_VERSION}
 
     @bp.app_template_filter("human_size")
     def _human_size(n) -> str:
@@ -171,6 +174,26 @@ def console_bp(
             disk={"free": usage.free, "total": usage.total},
             base_status=upstream.status(),
             uptime_s=uptime_s,
+        )
+
+    # ---- 关于 ---------------------------------------------------------------
+
+    @bp.route("/about")
+    def about_page():
+        started = float(current_app.config.get("STARTED", time.time()))
+        return render_template(
+            "about.html",
+            started=started,
+            uptime_s=round(time.time() - started, 1),
+            py_version=platform.python_version(),
+            os_name=f"{platform.system()} {platform.release()}",
+            hostname=platform.node(),
+            server_host=settings.host,
+            server_port=settings.port,
+            data_root=data_root,
+            base_repo_url=settings.base_repo_url,
+            base_auto_update=settings.base_auto_update,
+            base_cron=settings.base_cron,
         )
 
     # ---- 词库文件（自定义内容；基座文件在「上游基座」页） ---------------------

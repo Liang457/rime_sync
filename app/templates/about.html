@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}关于 · RIME 控制台{% endblock %}
+{% block pagetitle %}关于{% endblock %}
+{% block content %}
+<div class="stat-grid">
+  <div class="stat">
+    <div class="num">v{{ server_version }}</div>
+    <div class="label">服务器版本</div>
+  </div>
+  <div class="stat">
+    <div class="num">{{ (uptime_s / 3600) | round(1) }} <small>小时</small></div>
+    <div class="label">运行时长 · {{ started | epoch_fmt }} 启动</div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <h2>运行环境</h2>
+    <table class="kv-table">
+      <tbody>
+        <tr><td>Python</td><td class="mono">{{ py_version }}</td></tr>
+        <tr><td>操作系统</td><td class="mono">{{ os_name }}</td></tr>
+        <tr><td>主机名</td><td class="mono">{{ hostname or '—' }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>配置概览</h2>
+    <table class="kv-table">
+      <tbody>
+        <tr><td>监听地址</td><td class="mono">{{ server_host }}:{{ server_port }}</td></tr>
+        <tr><td>数据目录</td><td class="mono">{{ data_root }}</td></tr>
+        <tr><td>基座仓库</td><td class="mono">{{ base_repo_url }}</td></tr>
+        <tr><td>基座自动更新</td><td class="mono">{% if base_auto_update %}开启（{{ base_cron }}）{% else %}关闭{% endif %}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>项目信息</h2>
+  <table class="kv-table">
+    <tbody>
+      <tr><td>生产地址</td><td class="mono"><a href="https://rime.l.gk12.cn" target="_blank" rel="noopener">https://rime.l.gk12.cn</a></td></tr>
+      <tr><td>分发服务器</td><td class="mono"><a href="https://github.com/Liang457/rime_sync" target="_blank" rel="noopener">github.com/Liang457/rime_sync</a></td></tr>
+      <tr><td>PC 同步客户端</td><td class="mono"><a href="https://github.com/Liang457/rime_sync_cli" target="_blank" rel="noopener">github.com/Liang457/rime_sync_cli</a></td></tr>
+    </tbody>
+  </table>
+  <div class="muted small" style="margin-top:10px">版本号为手动维护的常量（app/api.py 的 SERVER_VERSION），随功能更新 bump。</div>
+</div>
+{% endblock %}

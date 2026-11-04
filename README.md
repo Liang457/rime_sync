@@ -24,7 +24,7 @@ rime_dict（本地数据工程）──publish──▶ rime_sync 服务器 ◀�
 - 8 个 API：manifest、单文件/打包下载、publish（sha3 幂等）、用户词库推拉、
   health、status。
 - Web 控制台：仪表盘 / 词库文件 / 配置管理（在线编辑）/ 上游基座（git 拉取
-  加重建基线）/ 设备。
+  加重建基线）/ 设备 / 关于（版本、运行环境、配置概览）。
 - 上游基座：rime-ice 只读克隆；重建基线时基座覆盖 base 来源文件，其他来源
   （publish/console/upload/migrate）受保护，可选强制接管。
 - 发布流：`POST /api/publish` 供 rime_dict 一条命令发布，控制台上传作备用入口。
