@@ -35,13 +35,13 @@ def cmd_clear_password() -> None:
     print("已清除密码（免登录模式），重启服务生效。")
 
 
-def cmd_import_runtime(old_dir: str) -> None:
+def cmd_import_runtime(old_dir: str, root: Path = ROOT) -> None:
     """旧 runtime/ 整体迁入文件库，source=migrate（基座重建时受保护）。"""
     src = Path(old_dir).resolve()
     if not src.is_dir():
         sys.exit(f"目录不存在: {src}")
-    app = create_app(root_dir=ROOT)
-    store = FileStore(ROOT / "store")
+    app = create_app(root_dir=root, run_scheduler=False)
+    store = FileStore(root / "store")
     items = []
     for p in src.rglob("*"):
         if p.is_file():
@@ -55,7 +55,7 @@ def cmd_import_runtime(old_dir: str) -> None:
     print(f"完成：变更 {changed}，manifest revision = {store.revision}")
 
 
-def cmd_import_sync(old_dir: str) -> None:
+def cmd_import_sync(old_dir: str, root: Path = ROOT) -> None:
     """旧 sync/<device>/（含 _manifest.json 元数据）迁入新设备中转区，
     并把 v1 config/devices.json 里的设备元数据（last_seen）并入注册表。"""
     import json
@@ -64,7 +64,7 @@ def cmd_import_sync(old_dir: str) -> None:
     src = Path(old_dir).resolve()
     if not src.is_dir():
         sys.exit(f"目录不存在: {src}")
-    new_sync = ROOT / "sync"
+    new_sync = root / "sync"
     new_sync.mkdir(parents=True, exist_ok=True)
     reg_path = new_sync / "_devices.json"
     registry: dict = {}
@@ -73,7 +73,7 @@ def cmd_import_sync(old_dir: str) -> None:
 
     # v1 设备元数据：{"devices": {名字: {last_seen, ...}}}
     old_meta: dict = {}
-    dev_file = ROOT / "config" / "devices.json"
+    dev_file = root / "config" / "devices.json"
     if dev_file.exists():
         try:
             data = json.loads(dev_file.read_text(encoding="utf-8"))
