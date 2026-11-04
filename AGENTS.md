@@ -22,10 +22,12 @@ manifest 做差量。不要再引入 dict/full_sync/config 之类按内容类型
 ## 当前状态与待办（2026-11-04）
 
 - v2 已落地并完成多轮控制台迭代（基座白名单、页面拆分、cron 自动更新、
-  `.custom.yaml` 配置表单、词库开关与预设定制文件），`main`，pytest 127 用例
+  `.custom.yaml` 配置表单、词库开关与预设定制文件），`main`，pytest 128 用例
   全绿。
 - 控制台有「关于」页与侧边栏常驻版本号（`/about`）。版本号是 `app/api.py`
-  的 `SERVER_VERSION` 常量，当前 `2.0.0`，约定随功能更新手动 bump；`/api/health`
+  的 `SERVER_VERSION` 常量，当前 `2.0.1`，约定随功能更新手动 bump；**不随发
+  版 tag**，除非主人点名（2026-11-04 主人明示：不喜欢 tag 堆积，老版本对其
+  无用）；`/api/health`
   的 `server_version` 字段被 `rime_sync_cli status` 消费，改名需同步客户端。
 - 待办：部署机迁移（需用户本人 `git push` 后进行）。步骤：服务器 `git pull`
   → `manage.py import-runtime` → `manage.py import-sync` → systemd ExecStart
