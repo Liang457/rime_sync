@@ -29,7 +29,6 @@ backups/
 
 # AI assistant context files (local only, not part of the repo)
 .claude/
-AGENTS.md
 CLAUDE.md
 .qoder/
 
