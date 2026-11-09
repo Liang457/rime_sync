@@ -21,7 +21,7 @@ from .services.store import FileStore
 from .services.upstream import BaseManager
 from .services.userdb import UserDbStore
 
-SERVER_VERSION = "2.1.0"
+SERVER_VERSION = "2.1.1"
 
 
 def api_bp(

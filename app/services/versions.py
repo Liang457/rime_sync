@@ -1,9 +1,10 @@
 """版本号：从文件内容解析 + 与 manifest 备注组合成展示字段。
 
 两个来源：
-- 解析版本：文件自己写的 version（dict.yaml 顶层 `version:`、schema.yaml 的
-  `schema.version`）。注释头（`# 语料版本: 20261105`）不算——只有行首就是
-  `version:` 才算，所以 `config_version:`、注释都不会误命中。
+- 解析版本：文件自己写的版本，三级取第一个命中的——顶层 `version:`（词库内容
+  版本）、`schema:` 块内的 `version:`（方案版本）、顶层 `config_version:`
+  （Rime 配置版本；default/weasel/squirrel 与 trime 主题只有这一种）。注释头
+  （`# 语料版本: 20261105`）不算，只有行首是键才算。
 - 备注版本：manifest 里发布者/人工标注的 version（如主题包的构建标签）。
 
 展示规则（解析优先）：
@@ -37,8 +38,13 @@ def _scalar(raw: str) -> str:
 
 
 def parse_version(text: str) -> str:
-    """从（文件开头的）文本里取版本号；顶层优先，其次 `schema:` 块内。"""
-    top = schema = ""
+    """从（文件开头的）文本里取版本号。
+
+    三级：顶层 `version:`（词库内容版本）→ `schema:` 块内的 `version:`（方案
+    版本）→ 顶层 `config_version:`（Rime 配置版本，default/weasel/squirrel 与
+    trime 主题只有这个）。
+    """
+    top = schema = config = ""
     in_schema = False
     for raw in text.splitlines():
         body = raw.strip()
@@ -48,10 +54,12 @@ def parse_version(text: str) -> str:
             in_schema = body.endswith(":") and body.split(":", 1)[0].strip() == "schema"
             if not top and body.startswith("version:"):
                 top = _scalar(body[len("version:"):])
+            elif not config and body.startswith("config_version:"):
+                config = _scalar(body[len("config_version:"):])
             continue
         if in_schema and not schema and body.startswith("version:"):
             schema = _scalar(body[len("version:"):])
-    return top or schema
+    return top or schema or config
 
 
 def inner_version(path: Path | None) -> str:

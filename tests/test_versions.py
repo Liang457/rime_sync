@@ -38,10 +38,21 @@ def test_dict_version_after_separator(tmp_path):
     assert inner_version(_write(tmp_path, "zzz.dict.yaml", DICT)) == "3.3 (2026-11-05)"
 
 
-def test_comment_and_config_version_are_not_versions(tmp_path):
-    """注释头里的「语料版本」和 config_version 都不是文件版本。"""
-    text = '# Rime theme\n# 版本: 9.9\nconfig_version: "3.0"\n'
+def test_comment_version_is_not_a_version(tmp_path):
+    """注释头里的「版本:」不是文件版本（只有行首是键才算）。"""
+    text = '# Rime theme\n# 版本: 9.9\n# 语料版本: 20261105\n'
     assert inner_version(_write(tmp_path, "wechat.trime.yaml", text)) == ""
+
+
+def test_config_version_counts(tmp_path):
+    """default/weasel/squirrel 没有 version，config_version 就是它的版本。"""
+    text = "# Rime default settings\nconfig_version: '2026-02-06'\n"
+    assert inner_version(_write(tmp_path, "default.yaml", text)) == "2026-02-06"
+
+
+def test_content_version_beats_config_version(tmp_path):
+    text = '---\nname: a\nversion: "1.2"\nconfig_version: "3.0"\n'
+    assert inner_version(_write(tmp_path, "a.yaml", text)) == "1.2"
 
 
 def test_schema_block_version(tmp_path):
