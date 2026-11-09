@@ -93,6 +93,17 @@ def test_display_neither():
     assert display("", "") == {"version": "", "version_note": ""}
 
 
+def test_config_version_keeps_main_slot_with_note(tmp_path):
+    """config_version 命中就占主位，备注一律进括号（主题包 v2.6 那次定案）。"""
+    path = _write(tmp_path, "wechat.trime.yaml",
+                  'config_version: "3.0"\nname: 微信风\n')
+    assert inner_version(path) == "3.0"
+    assert display("3.0", "v2.6-restore-20261109_160633") == {
+        "version": "3.0",
+        "version_note": "v2.6-restore-20261109_160633",
+    }
+
+
 # ---- 页面 ---------------------------------------------------------------
 
 
