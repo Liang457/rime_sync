@@ -181,6 +181,8 @@ tbody tr:hover td { background: var(--md-sys-color-surface-container); }
 tbody tr:last-child td { border-bottom: none; }
 td.actions { text-align: right; white-space: nowrap; }
 td.actions > * + * { margin-left: 6px; }
+/* 版本列：解析版本（备注版本）可能很长（如主题包构建标签），单行截断，全文走 title */
+td.versions { max-width: 24ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .empty { padding: 30px; text-align: center; color: var(--md-sys-color-on-surface-variant); }
 

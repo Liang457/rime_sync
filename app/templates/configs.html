@@ -54,7 +54,7 @@
     {% if editor %}
       {% with path=editor.path, content=editor.content, meta=editor.meta,
               saved=editor.saved, revision=editor.revision, custom=editor.custom,
-              preset_custom=editor.preset_custom %}
+              preset_custom=editor.preset_custom, ver=editor.ver %}
         {% include "partials/editor.html" %}
       {% endwith %}
     {% else %}

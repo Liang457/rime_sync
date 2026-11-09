@@ -6,7 +6,7 @@
   {% for r in rows %}
     <tr>
       <td class="mono">{{ r.path }}</td>
-      <td>{{ r.version or '—' }}</td>
+      <td class="versions"{% if r.version %} title="{{ r.version }}{% if r.version_note %}（{{ r.version_note }}）{% endif %}"{% endif %}>{% if r.version %}{{ r.version }}{% if r.version_note %}<span class="muted">（{{ r.version_note }}）</span>{% endif %}{% else %}--{% endif %}</td>
       <td><span class="chip b-{{ r.source }}">{{ r.source }}</span></td>
       <td>{{ r.size | human_size }}</td>
       <td class="mono muted">{{ r.sha3 }}</td>

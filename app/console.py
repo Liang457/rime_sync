@@ -21,7 +21,7 @@ from flask import (
 
 from .api import SERVER_VERSION
 from .safe_path import safe_relpath
-from .services import config_options, custom_yaml, rime_ice
+from .services import config_options, custom_yaml, rime_ice, versions
 from .services.store import AddItem, FileStore
 from .services.upstream import BaseManager, GitError
 from .services.userdb import UserDbStore
@@ -34,6 +34,16 @@ def console_bp(
     settings, data_root: Path,
 ) -> Blueprint:
     bp = Blueprint("console", __name__)
+
+    # 解析版本缓存：(rel, sha3) → 文件内 version。内容一换 sha3 就换，天然失效。
+    parsed_versions: dict[tuple[str, str], str] = {}
+
+    def _version_view(rel: str, meta: dict) -> dict:
+        """版本展示字段：解析优先，manifest 备注作括号补充（见 services/versions）。"""
+        key = (rel, meta.get("sha3", ""))
+        if key not in parsed_versions:
+            parsed_versions[key] = versions.inner_version(store.get_path(rel))
+        return versions.display(parsed_versions[key], meta.get("version", ""))
 
     # ---- 认证 ---------------------------------------------------------------
 
@@ -149,7 +159,7 @@ def console_bp(
                 continue
             rows.append({
                 "path": rel,
-                "version": meta.get("version", ""),
+                **_version_view(rel, meta),
                 "source": meta.get("source", ""),
                 "size": meta.get("size", 0),
                 "sha3": meta.get("sha3", "")[:20],
@@ -372,6 +382,7 @@ def console_bp(
         disk = store.get_path(path)
         content = disk.read_text(encoding="utf-8", errors="replace") if disk else ""
         ctx = {"path": path, "content": content, "meta": meta, "saved": saved,
+               "ver": _version_view(path, meta),
                "revision": store.revision, "preset_custom": None}
         if meta.get("source") == "base":
             # 基座文件对应的定制补丁还没建 → 警示条里给一键创建入口
@@ -595,7 +606,7 @@ def console_bp(
                 continue
             rows.append({
                 "path": rel,
-                "version": meta.get("version", ""),
+                **_version_view(rel, meta),
                 "source": meta.get("source", ""),
                 "size": meta.get("size", 0),
                 "sha3": meta.get("sha3", "")[:20],

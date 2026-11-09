@@ -25,7 +25,7 @@ manifest 做差量。不要再引入 dict/full_sync/config 之类按内容类型
   `.custom.yaml` 配置表单、词库开关与预设定制文件），`main`，pytest 128 用例
   全绿。
 - 控制台有「关于」页与侧边栏常驻版本号（`/about`）。版本号是 `app/api.py`
-  的 `SERVER_VERSION` 常量，当前 `2.0.1`，约定随功能更新手动 bump；**不随发
+  的 `SERVER_VERSION` 常量，当前 `2.1.0`，约定随功能更新手动 bump；**不随发
   版 tag**，除非主人点名（2026-11-04 主人明示：不喜欢 tag 堆积，老版本对其
   无用）；`/api/health`
   的 `server_version` 字段被 `rime_sync_cli status` 消费，改名需同步客户端。
@@ -140,6 +140,15 @@ activity 不抛出。cron 字段按服务器本地墙钟解析——裸 epoch �
 
 词库文件页只显示非 base 来源（自定义内容）；上游基座页是基座文件全览
 （搜索加下载/删除）。两页互相留了跳转提示。
+
+### versions.py（版本展示）
+
+`app/services/versions.py`：版本列走「解析优先 + 备注补充」。解析版本读文件
+自身（dict.yaml 顶层 `version:`、schema.yaml 的 `schema.version`，只看开头
+8KB）；备注版本是 manifest 里的 `version`（发布者/人工标注，如主题包构建
+标签）。有解析有备注显示「解析（备注）」，相同则只显示一次；只有一边就显示
+那一边；都没有渲染成 `--`。console 侧 `_version_view()` 按 `(rel, sha3)` 缓存，
+内容不变不重读。注释头（`# 语料版本:`）与 `config_version:` 都不算版本。
 
 ## 控制台前端注意事项
 

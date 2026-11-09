@@ -3,7 +3,7 @@
     <div class="mono md-typescale-body-medium">{{ path }}</div>
     <div class="muted small">
       <span class="chip b-{{ meta.source }}">{{ meta.source }}</span>
-      版本 {{ meta.version or '—' }} · {{ meta.size | human_size }} · <span class="mono">{{ meta.sha3[:20] }}</span>
+      版本 {% if ver.version %}{{ ver.version }}{% if ver.version_note %}<span class="muted">（{{ ver.version_note }}）</span>{% endif %}{% else %}--{% endif %} · {{ meta.size | human_size }} · <span class="mono">{{ meta.sha3[:20] }}</span>
     </div>
   </div>
   {% if saved %}<span class="chip ok">已保存 · revision {{ revision }}</span>{% endif %}
